@@ -1,5 +1,5 @@
 name: lumina_ai
-description: AI Music Generator - TikTok Style
+description: AI Music Generator
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -9,32 +9,13 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  
-  # State Management
   provider: ^6.1.1
-  
-  # HTTP & API
   http: ^1.1.0
-  dio: ^5.4.0
-  
-  # Storage
   shared_preferences: ^2.2.2
-  
-  # Audio Player
   just_audio: ^0.9.36
-  audio_service: ^0.18.12
-  
-  # UI
   google_fonts: ^6.1.0
   cached_network_image: ^3.3.1
-  shimmer: ^3.0.0
-  flutter_svg: ^2.0.9
-  
-  # Utils
-  intl: ^0.18.1
-  path_provider: ^2.1.2
-  permission_handler: ^11.1.0
-  
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -42,6 +23,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  
-  assets:
-    - assets/images/

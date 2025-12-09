@@ -21,6 +21,10 @@ class PlayerProvider with ChangeNotifier {
       : 0;
 
   PlayerProvider() {
+    _setupListeners();
+  }
+
+  void _setupListeners() {
     _player.positionStream.listen((pos) {
       _position = pos;
       notifyListeners();
@@ -49,9 +53,14 @@ class PlayerProvider with ChangeNotifier {
     
     _currentSong = song;
     _currentIndex = _playlist.indexWhere((s) => s.id == song.id);
+    if (_currentIndex < 0) _currentIndex = 0;
     
-    await _player.setUrl(song.fullOutputUrl);
-    await _player.play();
+    try {
+      await _player.setUrl(song.fullOutputUrl);
+      await _player.play();
+    } catch (e) {
+      debugPrint('Error playing: $e');
+    }
     notifyListeners();
   }
 
