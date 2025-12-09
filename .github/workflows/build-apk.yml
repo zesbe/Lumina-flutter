@@ -25,37 +25,26 @@ jobs:
           flutter-version: '3.24.0'
           channel: 'stable'
 
-      - name: Create Flutter project files
+      - name: Create Flutter project
         run: |
-          # Create a temp Flutter project to get platform files
-          cd ..
-          flutter create temp_project --org id.my.zesbe
+          # Save our lib folder
+          cp -r lib lib_backup
+          cp pubspec.yaml pubspec_backup.yaml
           
-          # Copy android folder to our project
-          rm -rf $GITHUB_WORKSPACE/android
-          cp -r temp_project/android $GITHUB_WORKSPACE/
+          # Create fresh Flutter project
+          rm -rf android ios web linux macos windows
+          flutter create . --org id.my.zesbe --project-name lumina_ai
           
-          # Copy other necessary files
-          cp temp_project/pubspec.lock $GITHUB_WORKSPACE/ 2>/dev/null || true
-          
-          cd $GITHUB_WORKSPACE
-
-      - name: Update Android package name
-        run: |
-          # Update package name in Android files
-          sed -i 's/com.example.temp_project/id.my.zesbe.luminaai/g' android/app/build.gradle
-          sed -i 's/com.example.temp_project/id.my.zesbe.luminaai/g' android/app/src/main/AndroidManifest.xml
-          sed -i 's/com.example.temp_project/id.my.zesbe.luminaai/g' android/app/src/debug/AndroidManifest.xml
-          sed -i 's/com.example.temp_project/id.my.zesbe.luminaai/g' android/app/src/profile/AndroidManifest.xml
-          
-          # Update app name
-          sed -i 's/temp_project/Lumina AI/g' android/app/src/main/AndroidManifest.xml
+          # Restore our code
+          rm -rf lib
+          mv lib_backup lib
+          mv pubspec_backup.yaml pubspec.yaml
 
       - name: Get dependencies
         run: flutter pub get
 
       - name: Build APK
-        run: flutter build apk --release
+        run: flutter build apk --release --no-tree-shake-icons
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
