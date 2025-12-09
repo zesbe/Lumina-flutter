@@ -27,18 +27,26 @@ jobs:
 
       - name: Create Flutter project
         run: |
-          # Save our lib folder
           cp -r lib lib_backup
           cp pubspec.yaml pubspec_backup.yaml
-          
-          # Create fresh Flutter project
           rm -rf android ios web linux macos windows
           flutter create . --org id.my.zesbe --project-name lumina_ai
-          
-          # Restore our code
           rm -rf lib
           mv lib_backup lib
           mv pubspec_backup.yaml pubspec.yaml
+
+      - name: Fix Kotlin version
+        run: |
+          # Update Kotlin version to fix compatibility
+          sed -i 's/ext.kotlin_version = .*/ext.kotlin_version = "1.9.22"/' android/build.gradle
+          
+          # Update Gradle plugin version
+          sed -i "s/classpath 'com.android.tools.build:gradle:.*/classpath 'com.android.tools.build:gradle:8.1.0'/" android/build.gradle
+          
+          # Set compileSdk and minSdk
+          sed -i 's/compileSdk .*/compileSdk 34/' android/app/build.gradle
+          sed -i 's/minSdk .*/minSdk 21/' android/app/build.gradle
+          sed -i 's/targetSdk .*/targetSdk 34/' android/app/build.gradle
 
       - name: Get dependencies
         run: flutter pub get
