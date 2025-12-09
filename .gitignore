@@ -1,0 +1,13 @@
+.dart_tool/
+.packages
+.pub/
+build/
+*.iml
+*.ipr
+*.iws
+.idea/
+.DS_Store
+pubspec.lock
+android/local.properties
+*.jks
+*.keystore
