@@ -38,9 +38,14 @@ class PlayerProvider with ChangeNotifier {
 
   Future<void> init() async {
     if (_isInitialized) return;
+    
+    // Set callbacks for notification controls
+    audioHandler.onSkipToNext = () => playNext();
+    audioHandler.onSkipToPrevious = () => playPrevious();
+    
     _setupListeners();
     _isInitialized = true;
-    debugPrint('[Player] Initialized');
+    debugPrint('[Player] Initialized with notification callbacks');
   }
 
   void _setupListeners() {
@@ -142,6 +147,7 @@ class PlayerProvider with ChangeNotifier {
     _playlist = songs.where((s) => s.status == 'completed').toList();
     _originalPlaylist = List.from(_playlist);
     if (_shuffleEnabled) _playlist.shuffle();
+    debugPrint('[Player] Playlist set: ${_playlist.length} songs');
   }
 
   Future<void> play(Generation song) async {
@@ -152,7 +158,7 @@ class PlayerProvider with ChangeNotifier {
     _currentIndex = _playlist.indexWhere((s) => s.id == song.id);
     if (_currentIndex < 0) _currentIndex = 0;
     
-    debugPrint('[Player] Playing: ${song.title}');
+    debugPrint('[Player] Playing: ${song.title} (index $_currentIndex/${_playlist.length})');
     
     await audioHandler.playUrl(
       song.fullOutputUrl,
@@ -174,28 +180,44 @@ class PlayerProvider with ChangeNotifier {
   Future<void> playNext() => _playNextInternal(loop: _repeatMode == RepeatMode.all);
 
   Future<void> _playNextInternal({bool loop = false}) async {
-    if (_playlist.isEmpty) return;
+    if (_playlist.isEmpty) {
+      debugPrint('[Player] No playlist');
+      return;
+    }
+    
+    debugPrint('[Player] Next: current=$_currentIndex, total=${_playlist.length}');
+    
     if (_currentIndex < _playlist.length - 1) {
       _currentIndex++;
     } else if (loop) {
       _currentIndex = 0;
     } else {
+      debugPrint('[Player] End of playlist');
       return;
     }
     await play(_playlist[_currentIndex]);
   }
 
   Future<void> playPrevious() async {
-    if (_playlist.isEmpty) return;
+    if (_playlist.isEmpty) {
+      debugPrint('[Player] No playlist');
+      return;
+    }
+    
+    debugPrint('[Player] Previous: current=$_currentIndex, position=${_position.inSeconds}s');
+    
+    // If more than 3 seconds in, restart current song
     if (_position.inSeconds > 3) {
       await seek(0);
       return;
     }
+    
     if (_currentIndex > 0) {
       _currentIndex--;
     } else if (_repeatMode == RepeatMode.all) {
       _currentIndex = _playlist.length - 1;
     } else {
+      debugPrint('[Player] Start of playlist');
       return;
     }
     await play(_playlist[_currentIndex]);

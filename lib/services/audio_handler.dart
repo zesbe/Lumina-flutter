@@ -1,9 +1,13 @@
+import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:flutter/foundation.dart';
 
 class MyAudioHandler extends BaseAudioHandler with SeekHandler {
   final AudioPlayer player = AudioPlayer();
+  
+  // Callbacks for skip actions
+  Function()? onSkipToNext;
+  Function()? onSkipToPrevious;
 
   MyAudioHandler() {
     player.playbackEventStream.listen(_broadcastState);
@@ -63,8 +67,16 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
   @override Future<void> play() => player.play();
   @override Future<void> pause() => player.pause();
   @override Future<void> seek(Duration position) => player.seek(position);
-  @override Future<void> skipToNext() async {}
-  @override Future<void> skipToPrevious() async {}
+  
+  @override 
+  Future<void> skipToNext() async {
+    onSkipToNext?.call();
+  }
+  
+  @override 
+  Future<void> skipToPrevious() async {
+    onSkipToPrevious?.call();
+  }
   
   @override
   Future<void> stop() async {
