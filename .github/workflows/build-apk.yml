@@ -34,16 +34,28 @@ jobs:
           mv assets_backup assets
           mv pubspec_backup.yaml pubspec.yaml
 
-      - name: Configure Android
+      - name: Configure Android for all versions
         run: |
+          # AndroidManifest with ALL permissions for Android 10-14
           cat > android/app/src/main/AndroidManifest.xml << 'EOF'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               xmlns:tools="http://schemas.android.com/tools">
               
+              <!-- Internet -->
               <uses-permission android:name="android.permission.INTERNET"/>
+              
+              <!-- Audio/Media -->
               <uses-permission android:name="android.permission.WAKE_LOCK"/>
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+              
+              <!-- Android 13+ Notifications -->
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+              
+              <!-- Storage for downloads -->
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>
+              <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
               
               <application
                   android:label="Lumina AI"
@@ -56,9 +68,12 @@ jobs:
                       android:name=".MainActivity"
                       android:exported="true"
                       android:launchMode="singleTop"
+                      android:taskAffinity=""
                       android:theme="@style/LaunchTheme"
                       android:hardwareAccelerated="true"
-                      android:windowSoftInputMode="adjustResize">
+                      android:windowSoftInputMode="adjustResize"
+                      android:showWhenLocked="true"
+                      android:turnScreenOn="true">
                       <meta-data
                           android:name="io.flutter.embedding.android.NormalTheme"
                           android:resource="@style/NormalTheme"/>
@@ -68,6 +83,7 @@ jobs:
                       </intent-filter>
                   </activity>
                   
+                  <!-- Audio Service for background playback & notifications -->
                   <service 
                       android:name="com.ryanheise.audioservice.AudioService"
                       android:foregroundServiceType="mediaPlayback"
@@ -78,6 +94,7 @@ jobs:
                       </intent-filter>
                   </service>
                   
+                  <!-- Media Button Receiver -->
                   <receiver 
                       android:name="com.ryanheise.audioservice.MediaButtonReceiver"
                       android:exported="true"
@@ -92,13 +109,13 @@ jobs:
           </manifest>
           EOF
           
+          # Update build.gradle
           sed -i 's/minSdk.*/minSdk = 21/' android/app/build.gradle
           sed -i 's/targetSdk.*/targetSdk = 34/' android/app/build.gradle
           sed -i 's/compileSdk.*/compileSdk = 34/' android/app/build.gradle
 
       - name: Copy custom app icon
         run: |
-          # Copy pre-made icons from assets
           cp assets/icons/mipmap-mdpi/ic_launcher.png android/app/src/main/res/mipmap-mdpi/
           cp assets/icons/mipmap-mdpi/ic_launcher_round.png android/app/src/main/res/mipmap-mdpi/
           cp assets/icons/mipmap-hdpi/ic_launcher.png android/app/src/main/res/mipmap-hdpi/
@@ -109,12 +126,11 @@ jobs:
           cp assets/icons/mipmap-xxhdpi/ic_launcher_round.png android/app/src/main/res/mipmap-xxhdpi/
           cp assets/icons/mipmap-xxxhdpi/ic_launcher.png android/app/src/main/res/mipmap-xxxhdpi/
           cp assets/icons/mipmap-xxxhdpi/ic_launcher_round.png android/app/src/main/res/mipmap-xxxhdpi/
-          echo "Custom icons copied!"
 
       - run: flutter pub get
       - run: flutter build apk --release
 
       - uses: actions/upload-artifact@v4
         with:
-          name: lumina-ai-apk
+          name: lumina-ai-v2.0.0
           path: build/app/outputs/flutter-apk/app-release.apk
