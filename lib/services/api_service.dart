@@ -278,4 +278,36 @@ class ApiService {
       throw Exception(data['message'] ?? 'Failed to change password');
     }
   }
+
+  // Toggle Public/Private
+  static Future<Map<String, dynamic>> togglePublic(int id) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/generations/$id/public'),
+      headers: headers,
+    );
+    
+    final data = jsonDecode(response.body);
+    if (!_isSuccess(response.statusCode)) {
+      throw Exception(data['message'] ?? 'Failed to toggle public');
+    }
+    return data;
+  }
+
+  // Get Public/Explore Generations (no auth required)
+  static Future<List<dynamic>> getExplore({String? type, int limit = 50, int page = 1}) async {
+    var url = '$baseUrl/explore?limit=$limit&page=$page';
+    if (type != null) url += '&type=$type';
+    
+    final response = await http.get(
+      Uri.parse(url),
+      headers: {'Content-Type': 'application/json'},
+    );
+    
+    final data = jsonDecode(response.body);
+    if (!_isSuccess(response.statusCode)) {
+      throw Exception(data['message'] ?? 'Failed to get explore');
+    }
+    return data['generations'] ?? [];
+  }
 }

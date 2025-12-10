@@ -147,18 +147,48 @@ class MusicProvider with ChangeNotifier {
       await ApiService.toggleFavorite(id);
       final index = _generations.indexWhere((g) => g.id == id);
       if (index != -1) {
+        final old = _generations[index];
         _generations[index] = Generation(
-          id: _generations[index].id,
-          type: _generations[index].type,
-          status: _generations[index].status,
-          title: _generations[index].title,
-          prompt: _generations[index].prompt,
-          style: _generations[index].style,
-          lyrics: _generations[index].lyrics,
-          outputUrl: _generations[index].outputUrl,
-          thumbnailUrl: _generations[index].thumbnailUrl,
-          isFavorite: !_generations[index].isFavorite,
-          createdAt: _generations[index].createdAt,
+          id: old.id,
+          type: old.type,
+          status: old.status,
+          title: old.title,
+          prompt: old.prompt,
+          style: old.style,
+          lyrics: old.lyrics,
+          outputUrl: old.outputUrl,
+          thumbnailUrl: old.thumbnailUrl,
+          isFavorite: !old.isFavorite,
+          isPublic: old.isPublic,
+          createdAt: old.createdAt,
+        );
+        notifyListeners();
+      }
+    } catch (e) {
+      _error = e.toString().replaceAll('Exception: ', '');
+      notifyListeners();
+    }
+  }
+
+  Future<void> togglePublic(int id) async {
+    try {
+      await ApiService.togglePublic(id);
+      final index = _generations.indexWhere((g) => g.id == id);
+      if (index != -1) {
+        final old = _generations[index];
+        _generations[index] = Generation(
+          id: old.id,
+          type: old.type,
+          status: old.status,
+          title: old.title,
+          prompt: old.prompt,
+          style: old.style,
+          lyrics: old.lyrics,
+          outputUrl: old.outputUrl,
+          thumbnailUrl: old.thumbnailUrl,
+          isFavorite: old.isFavorite,
+          isPublic: !old.isPublic,
+          createdAt: old.createdAt,
         );
         notifyListeners();
       }

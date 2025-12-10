@@ -9,6 +9,7 @@ class Generation {
   final String? outputUrl;
   final String? thumbnailUrl;
   final bool isFavorite;
+  final bool isPublic;
   final DateTime? createdAt;
   final String? errorMessage;
   final String? artist;
@@ -17,6 +18,7 @@ class Generation {
   final String? genre;
   final String? mood;
   final String? model;
+  final String? creatorName; // For explore items
 
   Generation({
     required this.id,
@@ -29,6 +31,7 @@ class Generation {
     this.outputUrl,
     this.thumbnailUrl,
     this.isFavorite = false,
+    this.isPublic = false,
     this.createdAt,
     this.errorMessage,
     this.artist,
@@ -37,6 +40,7 @@ class Generation {
     this.genre,
     this.mood,
     this.model,
+    this.creatorName,
   });
 
   factory Generation.fromJson(Map<String, dynamic> json) {
@@ -51,6 +55,7 @@ class Generation {
       outputUrl: json['output_url'],
       thumbnailUrl: json['thumbnail_url'],
       isFavorite: json['is_favorite'] ?? false,
+      isPublic: json['is_public'] ?? false,
       createdAt: json['created_at'] != null 
           ? DateTime.tryParse(json['created_at']) 
           : null,
@@ -61,6 +66,7 @@ class Generation {
       genre: json['genre'],
       mood: json['mood'],
       model: json['model'] ?? 'music-2.0',
+      creatorName: json['creator_name'],
     );
   }
 
