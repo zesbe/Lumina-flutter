@@ -28,24 +28,26 @@ jobs:
       - name: Create Flutter project
         run: |
           cp -r lib lib_backup
-          cp -r assets assets_backup
+          cp -r assets assets_backup 2>/dev/null || true
           cp pubspec.yaml pubspec_backup.yaml
           rm -rf android ios web linux macos windows test
           flutter create . --org id.my.zesbe --project-name lumina_ai --platforms android
-          rm -rf lib assets
+          rm -rf lib
           mv lib_backup lib
-          mv assets_backup assets
+          rm -rf assets
+          mv assets_backup assets 2>/dev/null || mkdir -p assets/icons
           mv pubspec_backup.yaml pubspec.yaml
 
       - name: Configure Android
         run: |
-          # AndroidManifest with audio service
+          # Main AndroidManifest with full audio service config
           cat > android/app/src/main/AndroidManifest.xml << 'MANIFESTEOF'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET"/>
               <uses-permission android:name="android.permission.WAKE_LOCK"/>
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+              <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
               
               <application
                   android:label="Lumina AI"
@@ -60,7 +62,9 @@ jobs:
                       android:theme="@style/LaunchTheme"
                       android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
                       android:hardwareAccelerated="true"
-                      android:windowSoftInputMode="adjustResize">
+                      android:windowSoftInputMode="adjustResize"
+                      android:showWhenLocked="true"
+                      android:turnScreenOn="true">
                       <meta-data
                           android:name="io.flutter.embedding.android.NormalTheme"
                           android:resource="@style/NormalTheme"/>
@@ -70,6 +74,7 @@ jobs:
                       </intent-filter>
                   </activity>
                   
+                  <!-- Audio Service for notification controls -->
                   <service
                       android:name="com.ryanheise.audioservice.AudioService"
                       android:foregroundServiceType="mediaPlayback"
@@ -79,8 +84,18 @@ jobs:
                       </intent-filter>
                   </service>
                   
+                  <!-- Media button receiver -->
                   <receiver
                       android:name="com.ryanheise.audioservice.MediaButtonReceiver"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MEDIA_BUTTON"/>
+                      </intent-filter>
+                  </receiver>
+                  
+                  <!-- Boot receiver for resuming playback -->
+                  <receiver
+                      android:name="androidx.media.session.MediaButtonReceiver"
                       android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MEDIA_BUTTON"/>
@@ -94,11 +109,16 @@ jobs:
           </manifest>
           MANIFESTEOF
 
-      - name: Create App Icon
+      - name: Create App Icon and Notification Icon
         run: |
-          # Create drawable directories
+          # Create all drawable directories
           mkdir -p android/app/src/main/res/drawable
           mkdir -p android/app/src/main/res/drawable-v24
+          mkdir -p android/app/src/main/res/drawable-hdpi
+          mkdir -p android/app/src/main/res/drawable-mdpi
+          mkdir -p android/app/src/main/res/drawable-xhdpi
+          mkdir -p android/app/src/main/res/drawable-xxhdpi
+          mkdir -p android/app/src/main/res/drawable-xxxhdpi
           mkdir -p android/app/src/main/res/mipmap-anydpi-v26
           mkdir -p android/app/src/main/res/mipmap-hdpi
           mkdir -p android/app/src/main/res/mipmap-mdpi
@@ -106,25 +126,7 @@ jobs:
           mkdir -p android/app/src/main/res/mipmap-xxhdpi
           mkdir -p android/app/src/main/res/mipmap-xxxhdpi
           
-          # Copy foreground icon
-          cp assets/icons/ic_launcher_foreground.xml android/app/src/main/res/drawable/ic_launcher_foreground.xml
-          cp assets/icons/ic_launcher_foreground.xml android/app/src/main/res/drawable-v24/ic_launcher_foreground.xml
-          
-          # Copy background
-          cp assets/icons/ic_launcher_background.xml android/app/src/main/res/drawable/ic_launcher_background.xml
-          
-          # Create adaptive icon config
-          cat > android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml << 'ADAPTIVEEOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-              <background android:drawable="@drawable/ic_launcher_background"/>
-              <foreground android:drawable="@drawable/ic_launcher_foreground"/>
-          </adaptive-icon>
-          ADAPTIVEEOF
-          
-          cp android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
-          
-          # Create notification icon
+          # Notification icon (white, for status bar) - must be single color
           cat > android/app/src/main/res/drawable/ic_notification.xml << 'NOTIFEOF'
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -138,42 +140,63 @@ jobs:
           </vector>
           NOTIFEOF
           
-          # Generate PNG icons for legacy devices using ImageMagick
-          # Install ImageMagick
+          # Copy to all densities
+          cp android/app/src/main/res/drawable/ic_notification.xml android/app/src/main/res/drawable-hdpi/ic_notification.xml
+          cp android/app/src/main/res/drawable/ic_notification.xml android/app/src/main/res/drawable-mdpi/ic_notification.xml
+          cp android/app/src/main/res/drawable/ic_notification.xml android/app/src/main/res/drawable-xhdpi/ic_notification.xml
+          cp android/app/src/main/res/drawable/ic_notification.xml android/app/src/main/res/drawable-xxhdpi/ic_notification.xml
+          cp android/app/src/main/res/drawable/ic_notification.xml android/app/src/main/res/drawable-xxxhdpi/ic_notification.xml
+          
+          # App icon foreground
+          cat > android/app/src/main/res/drawable/ic_launcher_foreground.xml << 'FGEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path android:fillColor="#84CC16" android:pathData="M54,54m-40,0a40,40 0,1 1,80 0a40,40 0,1 1,-80 0"/>
+              <path android:fillColor="#FFFFFF" android:pathData="M58,35v25c-1.5,-1.5 -3.5,-2.5 -6,-2.5c-4.5,0 -8,3.5 -8,8s3.5,8 8,8s8,-3.5 8,-8V43h8v-8H58z"/>
+              <path android:fillColor="#FFFFFF" android:pathData="M72,28l2,4l4,2l-4,2l-2,4l-2,-4l-4,-2l4,-2z"/>
+              <path android:fillColor="#FFFFFF" android:fillAlpha="0.7" android:pathData="M62,24l1,2l2,1l-2,1l-1,2l-1,-2l-2,-1l2,-1z"/>
+          </vector>
+          FGEOF
+          cp android/app/src/main/res/drawable/ic_launcher_foreground.xml android/app/src/main/res/drawable-v24/ic_launcher_foreground.xml
+          
+          # App icon background
+          cat > android/app/src/main/res/drawable/ic_launcher_background.xml << 'BGEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path android:fillColor="#0D0D0D" android:pathData="M0,0h108v108H0z"/>
+          </vector>
+          BGEOF
+          
+          # Adaptive icon
+          cat > android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml << 'ADAPTIVEEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@drawable/ic_launcher_background"/>
+              <foreground android:drawable="@drawable/ic_launcher_foreground"/>
+          </adaptive-icon>
+          ADAPTIVEEOF
+          cp android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+          
+          # Generate PNG icons
           sudo apt-get update && sudo apt-get install -y imagemagick
           
-          # Create a simple PNG icon using convert
-          convert -size 48x48 xc:'#0D0D0D' \
-            -fill '#84CC16' -draw "circle 24,24 24,6" \
-            -fill white -draw "path 'M26,14 L26,26 C25.3,25.3 24.4,24.8 23.2,24.8 C21.1,24.8 19.5,26.4 19.5,28.5 C19.5,30.6 21.1,32.2 23.2,32.2 C25.3,32.2 26.9,30.6 26.9,28.5 L26.9,18 L30.9,18 L30.9,14 Z'" \
-            android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-          
-          convert -size 72x72 xc:'#0D0D0D' \
-            -fill '#84CC16' -draw "circle 36,36 36,9" \
-            -fill white -draw "path 'M39,21 L39,39 C38,38 36.6,37.2 34.8,37.2 C31.7,37.2 29.2,39.6 29.2,42.8 C29.2,45.9 31.7,48.3 34.8,48.3 C37.9,48.3 40.4,45.9 40.4,42.8 L40.4,27 L46.4,27 L46.4,21 Z'" \
-            android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-          
-          convert -size 96x96 xc:'#0D0D0D' \
-            -fill '#84CC16' -draw "circle 48,48 48,12" \
-            -fill white -draw "path 'M52,28 L52,52 C50.7,50.7 48.8,49.6 46.4,49.6 C42.3,49.6 39,52.8 39,57 C39,61.2 42.3,64.4 46.4,64.4 C50.5,64.4 53.8,61.2 53.8,57 L53.8,36 L61.8,36 L61.8,28 Z'" \
-            android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          
-          convert -size 144x144 xc:'#0D0D0D' \
-            -fill '#84CC16' -draw "circle 72,72 72,18" \
-            -fill white -draw "path 'M78,42 L78,78 C76,76 73.2,74.4 69.6,74.4 C63.5,74.4 58.5,79.2 58.5,85.5 C58.5,91.8 63.5,96.6 69.6,96.6 C75.7,96.6 80.7,91.8 80.7,85.5 L80.7,54 L92.7,54 L92.7,42 Z'" \
-            android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          
-          convert -size 192x192 xc:'#0D0D0D' \
-            -fill '#84CC16' -draw "circle 96,96 96,24" \
-            -fill white -draw "path 'M104,56 L104,104 C101.3,101.3 97.6,99.2 92.8,99.2 C84.7,99.2 78,105.6 78,114 C78,122.4 84.7,128.8 92.8,128.8 C100.9,128.8 107.6,122.4 107.6,114 L107.6,72 L123.6,72 L123.6,56 Z'" \
-            android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          
-          # Copy for round icons
-          cp android/app/src/main/res/mipmap-mdpi/ic_launcher.png android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png
-          cp android/app/src/main/res/mipmap-hdpi/ic_launcher.png android/app/src/main/res/mipmap-hdpi/ic_launcher_round.png
-          cp android/app/src/main/res/mipmap-xhdpi/ic_launcher.png android/app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
-          cp android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
-          cp android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
+          for size in 48:mdpi 72:hdpi 96:xhdpi 144:xxhdpi 192:xxxhdpi; do
+            IFS=':' read px density <<< "$size"
+            radius=$((px/3))
+            convert -size ${px}x${px} xc:'#0D0D0D' \
+              -fill '#84CC16' -draw "circle $((px/2)),$((px/2)) $((px/2)),$((px/6))" \
+              android/app/src/main/res/mipmap-${density}/ic_launcher.png
+            cp android/app/src/main/res/mipmap-${density}/ic_launcher.png \
+               android/app/src/main/res/mipmap-${density}/ic_launcher_round.png
+          done
 
       - name: Get dependencies
         run: flutter pub get
