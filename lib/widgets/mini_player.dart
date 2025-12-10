@@ -57,10 +57,26 @@ class MiniPlayer extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 2),
-                        Text(
-                          '${song.displayArtist} • ${song.displayGenre}',
-                          style: TextStyle(color: Colors.grey[400], fontSize: 12),
-                          maxLines: 1,
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                '${song.displayArtist} • ${song.displayGenre}',
+                                style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (player.hasSleepTimer) ...[
+                              const SizedBox(width: 8),
+                              Icon(Icons.bedtime, size: 12, color: Colors.amber[400]),
+                              const SizedBox(width: 2),
+                              Text(
+                                _formatTimer(player.sleepTimerRemaining),
+                                style: TextStyle(color: Colors.amber[400], fontSize: 11),
+                              ),
+                            ],
+                          ],
                         ),
                       ],
                     ),
@@ -134,6 +150,13 @@ class MiniPlayer extends StatelessWidget {
     );
   }
 
+  String _formatTimer(Duration? d) {
+    if (d == null) return '';
+    final m = d.inMinutes.remainder(60);
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
   void _showFullPlayer(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -199,12 +222,6 @@ class _SpinningDiscState extends State<_SpinningDisc> with SingleTickerProviderS
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: const Color(0xFF84CC16), width: 2),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF84CC16).withOpacity(0.3),
-              blurRadius: 8,
-            ),
-          ],
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(22),
@@ -261,7 +278,6 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
       ),
       child: Column(
         children: [
-          // Handle
           Container(
             margin: const EdgeInsets.only(top: 12),
             width: 40,
@@ -272,7 +288,6 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
             ),
           ),
           
-          // Header
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             child: Row(
@@ -282,7 +297,23 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
                   icon: const Icon(Icons.keyboard_arrow_down, size: 28),
                   onPressed: () => Navigator.pop(context),
                 ),
-                const Text('Now Playing', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                Column(
+                  children: [
+                    const Text('Now Playing', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    if (player.hasSleepTimer)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.bedtime, size: 12, color: Colors.amber[400]),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Sleep in ${_formatTimerFull(player.sleepTimerRemaining)}',
+                            style: TextStyle(color: Colors.amber[400], fontSize: 11),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
                 IconButton(
                   icon: const Icon(Icons.more_vert),
                   onPressed: () => _showOptions(context, song, music),
@@ -291,7 +322,6 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
             ),
           ),
           
-          // Content
           Expanded(
             child: _showLyrics && song.lyrics != null
                 ? _buildLyricsView(song.lyrics!)
@@ -300,7 +330,6 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
                     : _buildAlbumArt(song),
           ),
           
-          // Song info
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Column(
@@ -317,21 +346,12 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
                   '${song.displayArtist} • ${song.productionYear}',
                   style: TextStyle(color: Colors.grey[400], fontSize: 14),
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _InfoChip(icon: Icons.music_note, label: song.displayGenre),
-                    const SizedBox(width: 8),
-                    _InfoChip(icon: Icons.mood, label: song.displayMood),
-                  ],
-                ),
               ],
             ),
           ),
           const SizedBox(height: 16),
           
-          // Progress
+          // Progress bar
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Column(
@@ -343,7 +363,6 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
                     activeTrackColor: const Color(0xFF84CC16),
                     inactiveTrackColor: Colors.white.withOpacity(0.1),
                     thumbColor: Colors.white,
-                    overlayColor: const Color(0xFF84CC16).withOpacity(0.2),
                   ),
                   child: Slider(
                     value: player.progress.clamp(0.0, 1.0),
@@ -365,24 +384,21 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
           ),
           const SizedBox(height: 8),
           
-          // Controls
+          // Main controls
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                // Lyrics toggle
+                // Shuffle
                 IconButton(
                   icon: Icon(
-                    _showLyrics ? Icons.lyrics : Icons.lyrics_outlined,
-                    color: _showLyrics ? const Color(0xFF84CC16) : Colors.white,
+                    Icons.shuffle_rounded,
+                    color: player.shuffleEnabled ? const Color(0xFF84CC16) : Colors.grey,
                   ),
-                  iconSize: 26,
-                  onPressed: () => setState(() {
-                    _showLyrics = !_showLyrics;
-                    _showInfo = false;
-                  }),
-                  tooltip: 'Lirik',
+                  iconSize: 24,
+                  onPressed: () => player.toggleShuffle(),
+                  tooltip: 'Shuffle',
                 ),
                 // Previous
                 IconButton(
@@ -421,49 +437,72 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
                   iconSize: 36,
                   onPressed: () => player.playNext(),
                 ),
-                // Info toggle
+                // Repeat
                 IconButton(
                   icon: Icon(
-                    _showInfo ? Icons.info : Icons.info_outline,
-                    color: _showInfo ? const Color(0xFF84CC16) : Colors.white,
+                    player.repeatMode == RepeatMode.one
+                        ? Icons.repeat_one_rounded
+                        : Icons.repeat_rounded,
+                    color: player.repeatMode != RepeatMode.off 
+                        ? const Color(0xFF84CC16) 
+                        : Colors.grey,
                   ),
-                  iconSize: 26,
-                  onPressed: () => setState(() {
-                    _showInfo = !_showInfo;
-                    _showLyrics = false;
-                  }),
-                  tooltip: 'Info',
+                  iconSize: 24,
+                  onPressed: () => player.toggleRepeatMode(),
+                  tooltip: _repeatModeText(player.repeatMode),
                 ),
               ],
             ),
           ),
+          const SizedBox(height: 8),
           
-          // Bottom actions
+          // Secondary controls
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _ActionButton(
+                _SmallActionButton(
+                  icon: _showLyrics ? Icons.lyrics : Icons.lyrics_outlined,
+                  label: 'Lirik',
+                  isActive: _showLyrics,
+                  onTap: () => setState(() {
+                    _showLyrics = !_showLyrics;
+                    _showInfo = false;
+                  }),
+                ),
+                _SmallActionButton(
+                  icon: Icons.bedtime,
+                  label: player.hasSleepTimer ? _formatTimerShort(player.sleepTimerRemaining) : 'Timer',
+                  isActive: player.hasSleepTimer,
+                  activeColor: Colors.amber,
+                  onTap: () => _showSleepTimerDialog(context, player),
+                ),
+                _SmallActionButton(
                   icon: song.isFavorite ? Icons.favorite : Icons.favorite_border,
                   label: 'Favorit',
-                  color: song.isFavorite ? Colors.red : Colors.white,
+                  isActive: song.isFavorite,
+                  activeColor: Colors.red,
                   onTap: () => music.toggleFavorite(song.id),
                 ),
-                _ActionButton(
+                _SmallActionButton(
                   icon: Icons.download,
-                  label: _isDownloading ? '${(_downloadProgress * 100).toInt()}%' : 'Download',
+                  label: _isDownloading ? '${(_downloadProgress * 100).toInt()}%' : 'Unduh',
                   onTap: _isDownloading ? null : () => _downloadMusic(song),
                 ),
-                _ActionButton(
-                  icon: Icons.share,
-                  label: 'Bagikan',
-                  onTap: () => _shareMusic(song),
+                _SmallActionButton(
+                  icon: _showInfo ? Icons.info : Icons.info_outline,
+                  label: 'Info',
+                  isActive: _showInfo,
+                  onTap: () => setState(() {
+                    _showInfo = !_showInfo;
+                    _showLyrics = false;
+                  }),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
         ],
       ),
     );
@@ -563,6 +602,60 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
     );
   }
 
+  void _showSleepTimerDialog(BuildContext context, PlayerProvider player) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1A1A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('⏰ Sleep Timer', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                if (player.hasSleepTimer)
+                  TextButton(
+                    onPressed: () {
+                      player.cancelSleepTimer();
+                      Navigator.pop(ctx);
+                    },
+                    child: const Text('Batalkan', style: TextStyle(color: Colors.red)),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              player.hasSleepTimer 
+                  ? 'Musik akan berhenti dalam ${_formatTimerFull(player.sleepTimerRemaining)}'
+                  : 'Pilih durasi untuk menghentikan musik otomatis',
+              style: TextStyle(color: Colors.grey[400]),
+            ),
+            const SizedBox(height: 20),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _TimerOption(label: '5 menit', duration: const Duration(minutes: 5), player: player, ctx: ctx),
+                _TimerOption(label: '15 menit', duration: const Duration(minutes: 15), player: player, ctx: ctx),
+                _TimerOption(label: '30 menit', duration: const Duration(minutes: 30), player: player, ctx: ctx),
+                _TimerOption(label: '45 menit', duration: const Duration(minutes: 45), player: player, ctx: ctx),
+                _TimerOption(label: '1 jam', duration: const Duration(hours: 1), player: player, ctx: ctx),
+                _TimerOption(label: '2 jam', duration: const Duration(hours: 2), player: player, ctx: ctx),
+              ],
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showOptions(BuildContext context, dynamic song, MusicProvider music) {
     showModalBottomSheet(
       context: context,
@@ -575,12 +668,6 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(2)),
-            ),
-            const SizedBox(height: 20),
             ListTile(
               leading: const Icon(Icons.download, color: Color(0xFF84CC16)),
               title: const Text('Download Musik'),
@@ -594,7 +681,6 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
               ListTile(
                 leading: const Icon(Icons.text_snippet, color: Color(0xFF84CC16)),
                 title: const Text('Download Lirik'),
-                subtitle: const Text('Simpan sebagai file .txt'),
                 onTap: () {
                   Navigator.pop(ctx);
                   _downloadLyrics(song);
@@ -611,15 +697,7 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
                 Navigator.pop(ctx);
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.share, color: Colors.grey),
-              title: const Text('Bagikan'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _shareMusic(song);
-              },
-            ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 10),
           ],
         ),
       ),
@@ -650,20 +728,15 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
     setState(() => _isDownloading = false);
 
     if (path != null) {
-      _showSnackBar('✅ Tersimpan di: LuminaAI/${path.split('/').last}');
+      _showSnackBar('✅ Tersimpan di: Download/LuminaAI/');
     } else {
       _showSnackBar('❌ Gagal mengunduh', isError: true);
     }
   }
 
   Future<void> _downloadLyrics(dynamic song) async {
-    if (song.lyrics == null || song.lyrics!.isEmpty) {
-      _showSnackBar('Tidak ada lirik', isError: true);
-      return;
-    }
-
     final path = await DownloadService.downloadLyrics(
-      lyrics: song.lyrics!,
+      lyrics: song.lyrics ?? '',
       title: song.title,
       artist: song.displayArtist,
       style: song.displayGenre,
@@ -671,15 +744,10 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
     );
 
     if (path != null) {
-      _showSnackBar('✅ Lirik tersimpan di: LuminaAI/');
+      _showSnackBar('✅ Lirik tersimpan!');
     } else {
-      _showSnackBar('❌ Gagal menyimpan lirik', isError: true);
+      _showSnackBar('❌ Gagal menyimpan', isError: true);
     }
-  }
-
-  void _shareMusic(dynamic song) {
-    // For now just show a snackbar - could integrate share_plus later
-    _showSnackBar('🔗 Link disalin! Bagikan ke temanmu');
   }
 
   void _showSnackBar(String message, {bool isError = false}) {
@@ -698,30 +766,99 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
     final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$m:$s';
   }
+
+  String _formatTimerFull(Duration? d) {
+    if (d == null) return '--:--';
+    if (d.inHours > 0) {
+      return '${d.inHours}j ${d.inMinutes.remainder(60)}m';
+    }
+    return '${d.inMinutes}m ${d.inSeconds.remainder(60)}s';
+  }
+
+  String _formatTimerShort(Duration? d) {
+    if (d == null) return 'Timer';
+    if (d.inHours > 0) {
+      return '${d.inHours}:${d.inMinutes.remainder(60).toString().padLeft(2, '0')}';
+    }
+    return '${d.inMinutes}:${d.inSeconds.remainder(60).toString().padLeft(2, '0')}';
+  }
+
+  String _repeatModeText(RepeatMode mode) {
+    switch (mode) {
+      case RepeatMode.off: return 'Repeat: Off';
+      case RepeatMode.one: return 'Repeat: One';
+      case RepeatMode.all: return 'Repeat: All';
+    }
+  }
 }
 
-class _InfoChip extends StatelessWidget {
+class _SmallActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
+  final bool isActive;
+  final Color? activeColor;
+  final VoidCallback? onTap;
 
-  const _InfoChip({required this.icon, required this.label});
+  const _SmallActionButton({
+    required this.icon,
+    required this.label,
+    this.isActive = false,
+    this.activeColor,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFF84CC16).withOpacity(0.15),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF84CC16).withOpacity(0.3)),
-      ),
-      child: Row(
+    final color = isActive ? (activeColor ?? const Color(0xFF84CC16)) : Colors.grey;
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: const Color(0xFF84CC16)),
-          const SizedBox(width: 4),
-          Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF84CC16))),
+          Icon(icon, color: color, size: 22),
+          const SizedBox(height: 4),
+          Text(label, style: TextStyle(fontSize: 10, color: color)),
         ],
+      ),
+    );
+  }
+}
+
+class _TimerOption extends StatelessWidget {
+  final String label;
+  final Duration duration;
+  final PlayerProvider player;
+  final BuildContext ctx;
+
+  const _TimerOption({
+    required this.label,
+    required this.duration,
+    required this.player,
+    required this.ctx,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        player.setSleepTimer(duration);
+        Navigator.pop(ctx);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⏰ Sleep timer: $label'),
+            backgroundColor: Colors.amber[700],
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.amber.withOpacity(0.3)),
+        ),
+        child: Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
       ),
     );
   }
@@ -737,65 +874,28 @@ class _InfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(bottom: 14),
       child: Row(
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
               color: const Color(0xFF84CC16).withOpacity(0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(icon, size: 18, color: const Color(0xFF84CC16)),
+            child: Icon(icon, size: 16, color: const Color(0xFF84CC16)),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[500])),
-                Text(value, style: const TextStyle(fontSize: 14)),
+                Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[500])),
+                Text(value, style: const TextStyle(fontSize: 13)),
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color? color;
-  final VoidCallback? onTap;
-
-  const _ActionButton({
-    required this.icon,
-    required this.label,
-    this.color,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Icon(icon, color: color ?? Colors.white, size: 24),
-          ),
-          const SizedBox(height: 6),
-          Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[400])),
         ],
       ),
     );

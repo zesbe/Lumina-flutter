@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'providers/auth_provider.dart';
 import 'providers/music_provider.dart';
@@ -9,6 +10,7 @@ import 'providers/player_provider.dart';
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_screen.dart';
+import 'screens/onboarding_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,17 +22,48 @@ void main() async {
     ),
   );
   
+  // Check if onboarding is complete
+  final prefs = await SharedPreferences.getInstance();
+  final onboardingComplete = prefs.getBool('onboarding_complete') ?? false;
+  
   // Initialize player
   final playerProvider = PlayerProvider();
   await playerProvider.init();
   
-  runApp(MyApp(playerProvider: playerProvider));
+  runApp(MyApp(
+    playerProvider: playerProvider,
+    showOnboarding: !onboardingComplete,
+  ));
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   final PlayerProvider playerProvider;
+  final bool showOnboarding;
   
-  const MyApp({super.key, required this.playerProvider});
+  const MyApp({
+    super.key, 
+    required this.playerProvider,
+    required this.showOnboarding,
+  });
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  late bool _showOnboarding;
+
+  @override
+  void initState() {
+    super.initState();
+    _showOnboarding = widget.showOnboarding;
+  }
+
+  void _completeOnboarding() {
+    setState(() {
+      _showOnboarding = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,7 +71,7 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => MusicProvider()),
-        ChangeNotifierProvider.value(value: playerProvider),
+        ChangeNotifierProvider.value(value: widget.playerProvider),
       ],
       child: MaterialApp(
         title: 'Lumina AI',
@@ -60,7 +93,9 @@ class MyApp extends StatelessWidget {
             elevation: 0,
           ),
         ),
-        home: const AuthWrapper(),
+        home: _showOnboarding 
+            ? OnboardingScreen(onComplete: _completeOnboarding)
+            : const AuthWrapper(),
       ),
     );
   }
