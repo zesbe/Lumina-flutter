@@ -25,11 +25,13 @@ jobs:
       - name: Setup project
         run: |
           cp -r lib lib_backup
+          cp -r assets assets_backup
           cp pubspec.yaml pubspec_backup.yaml
           rm -rf android ios web linux macos windows test
           flutter create . --org id.my.zesbe --project-name lumina_ai --platforms android
-          rm -rf lib
+          rm -rf lib assets
           mv lib_backup lib
+          mv assets_backup assets
           mv pubspec_backup.yaml pubspec.yaml
 
       - name: Configure Android
@@ -90,20 +92,24 @@ jobs:
           </manifest>
           EOF
           
-          # Fix build.gradle
           sed -i 's/minSdk.*/minSdk = 21/' android/app/build.gradle
           sed -i 's/targetSdk.*/targetSdk = 34/' android/app/build.gradle
           sed -i 's/compileSdk.*/compileSdk = 34/' android/app/build.gradle
 
-      - name: Create icons
+      - name: Copy custom app icon
         run: |
-          sudo apt-get update && sudo apt-get install -y imagemagick
-          for size in 48:mdpi 72:hdpi 96:xhdpi 144:xxhdpi 192:xxxhdpi; do
-            IFS=':' read px density <<< "$size"
-            convert -size ${px}x${px} xc:'#0D0D0D' -fill '#84CC16' \
-              -draw "circle $((px/2)),$((px/2)) $((px/2)),$((px/6))" \
-              android/app/src/main/res/mipmap-${density}/ic_launcher.png
-          done
+          # Copy pre-made icons from assets
+          cp assets/icons/mipmap-mdpi/ic_launcher.png android/app/src/main/res/mipmap-mdpi/
+          cp assets/icons/mipmap-mdpi/ic_launcher_round.png android/app/src/main/res/mipmap-mdpi/
+          cp assets/icons/mipmap-hdpi/ic_launcher.png android/app/src/main/res/mipmap-hdpi/
+          cp assets/icons/mipmap-hdpi/ic_launcher_round.png android/app/src/main/res/mipmap-hdpi/
+          cp assets/icons/mipmap-xhdpi/ic_launcher.png android/app/src/main/res/mipmap-xhdpi/
+          cp assets/icons/mipmap-xhdpi/ic_launcher_round.png android/app/src/main/res/mipmap-xhdpi/
+          cp assets/icons/mipmap-xxhdpi/ic_launcher.png android/app/src/main/res/mipmap-xxhdpi/
+          cp assets/icons/mipmap-xxhdpi/ic_launcher_round.png android/app/src/main/res/mipmap-xxhdpi/
+          cp assets/icons/mipmap-xxxhdpi/ic_launcher.png android/app/src/main/res/mipmap-xxxhdpi/
+          cp assets/icons/mipmap-xxxhdpi/ic_launcher_round.png android/app/src/main/res/mipmap-xxxhdpi/
+          echo "Custom icons copied!"
 
       - run: flutter pub get
       - run: flutter build apk --release
