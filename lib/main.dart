@@ -22,11 +22,9 @@ void main() async {
     ),
   );
   
-  // Check if onboarding is complete
   final prefs = await SharedPreferences.getInstance();
   final onboardingComplete = prefs.getBool('onboarding_complete') ?? false;
   
-  // Initialize player
   final playerProvider = PlayerProvider();
   await playerProvider.init();
   
@@ -60,9 +58,7 @@ class _MyAppState extends State<MyApp> {
   }
 
   void _completeOnboarding() {
-    setState(() {
-      _showOnboarding = false;
-    });
+    setState(() => _showOnboarding = false);
   }
 
   @override
@@ -85,9 +81,7 @@ class _MyAppState extends State<MyApp> {
             secondary: Color(0xFF22C55E),
             surface: Color(0xFF1A1A1A),
           ),
-          textTheme: GoogleFonts.interTextTheme(
-            ThemeData.dark().textTheme,
-          ),
+          textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
           appBarTheme: const AppBarTheme(
             backgroundColor: Colors.transparent,
             elevation: 0,
@@ -108,14 +102,8 @@ class AuthWrapper extends StatelessWidget {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     
-    if (auth.isLoading) {
-      return const SplashScreen();
-    }
-    
-    if (auth.isAuthenticated) {
-      return const MainScreen();
-    }
-    
+    if (auth.isLoading) return const SplashScreen();
+    if (auth.isAuthenticated) return const MainScreen();
     return const LoginScreen();
   }
 }

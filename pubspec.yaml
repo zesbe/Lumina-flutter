@@ -13,7 +13,6 @@ dependencies:
   http: ^1.1.0
   shared_preferences: ^2.2.0
   just_audio: ^0.9.35
-  audio_service: ^0.18.12
   google_fonts: ^5.1.0
   cached_network_image: ^3.3.0
   path_provider: ^2.1.1
