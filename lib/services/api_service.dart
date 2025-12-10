@@ -30,6 +30,11 @@ class ApiService {
     };
   }
 
+  // Check if response is successful (200, 201, 202)
+  static bool _isSuccess(int statusCode) {
+    return statusCode >= 200 && statusCode < 300;
+  }
+
   static Future<Map<String, dynamic>> login(String email, String password) async {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/login'),
@@ -38,8 +43,8 @@ class ApiService {
     );
     
     final data = jsonDecode(response.body);
-    if (response.statusCode != 200) {
-      throw Exception(data['message'] ?? 'Login failed');
+    if (!_isSuccess(response.statusCode)) {
+      throw Exception(data['message'] ?? data['error'] ?? 'Login failed');
     }
     return data;
   }
@@ -52,8 +57,8 @@ class ApiService {
     );
     
     final data = jsonDecode(response.body);
-    if (response.statusCode != 200 && response.statusCode != 201) {
-      throw Exception(data['message'] ?? 'Registration failed');
+    if (!_isSuccess(response.statusCode)) {
+      throw Exception(data['message'] ?? data['error'] ?? 'Registration failed');
     }
     return data;
   }
@@ -66,8 +71,8 @@ class ApiService {
     );
     
     final data = jsonDecode(response.body);
-    if (response.statusCode != 200) {
-      throw Exception(data['message'] ?? 'Failed to get profile');
+    if (!_isSuccess(response.statusCode)) {
+      throw Exception(data['message'] ?? data['error'] ?? 'Failed to get profile');
     }
     return data;
   }
@@ -80,17 +85,19 @@ class ApiService {
     final response = await http.get(Uri.parse(url), headers: headers);
     final data = jsonDecode(response.body);
     
-    if (response.statusCode != 200) {
-      throw Exception(data['message'] ?? 'Failed to get generations');
+    if (!_isSuccess(response.statusCode)) {
+      throw Exception(data['message'] ?? data['error'] ?? 'Failed to get generations');
     }
     return data['generations'] ?? [];
   }
 
+  // Generate Music
   static Future<Map<String, dynamic>> generateMusic({
     required String title,
     required String prompt,
     required String lyrics,
     String? style,
+    String model = 'music-2.0',
   }) async {
     final headers = await _getHeaders();
     final response = await http.post(
@@ -101,29 +108,174 @@ class ApiService {
         'prompt': prompt,
         'lyrics': lyrics,
         'style': style,
+        'model': model,
       }),
     );
     
     final data = jsonDecode(response.body);
-    if (response.statusCode != 200 && response.statusCode != 201) {
-      throw Exception(data['message'] ?? 'Failed to generate music');
+    // 202 Accepted = generation started (success!)
+    if (!_isSuccess(response.statusCode)) {
+      throw Exception(data['message'] ?? data['error'] ?? 'Failed to generate music');
     }
     return data;
   }
 
+  // Generate Voice/TTS
+  static Future<Map<String, dynamic>> generateVoice({
+    required String text,
+    required String title,
+    String voiceId = 'male-qn-qingse',
+    double speed = 1.0,
+  }) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/voice/generate'),
+      headers: headers,
+      body: jsonEncode({
+        'text': text,
+        'title': title,
+        'voice_id': voiceId,
+        'speed': speed,
+      }),
+    );
+    
+    final data = jsonDecode(response.body);
+    if (!_isSuccess(response.statusCode)) {
+      throw Exception(data['message'] ?? data['error'] ?? 'Failed to generate voice');
+    }
+    return data;
+  }
+
+  // Generate Video
+  static Future<Map<String, dynamic>> generateVideo({
+    required String prompt,
+    required String title,
+    int duration = 5,
+  }) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/video/generate'),
+      headers: headers,
+      body: jsonEncode({
+        'prompt': prompt,
+        'title': title,
+        'duration': duration,
+      }),
+    );
+    
+    final data = jsonDecode(response.body);
+    if (!_isSuccess(response.statusCode)) {
+      throw Exception(data['message'] ?? data['error'] ?? 'Failed to generate video');
+    }
+    return data;
+  }
+
+  // Generate Image (Album Art)
+  static Future<Map<String, dynamic>> generateImage({
+    required String prompt,
+    required String title,
+  }) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/image/generate'),
+      headers: headers,
+      body: jsonEncode({
+        'prompt': prompt,
+        'title': title,
+      }),
+    );
+    
+    final data = jsonDecode(response.body);
+    if (!_isSuccess(response.statusCode)) {
+      throw Exception(data['message'] ?? data['error'] ?? 'Failed to generate image');
+    }
+    return data;
+  }
+
+  // Toggle Favorite
   static Future<void> toggleFavorite(int id) async {
     final headers = await _getHeaders();
-    await http.post(
+    final response = await http.post(
       Uri.parse('$baseUrl/generations/$id/favorite'),
       headers: headers,
     );
+    
+    if (!_isSuccess(response.statusCode)) {
+      final data = jsonDecode(response.body);
+      throw Exception(data['message'] ?? 'Failed to toggle favorite');
+    }
   }
 
+  // Delete Generation
   static Future<void> deleteGeneration(int id) async {
     final headers = await _getHeaders();
-    await http.delete(
+    final response = await http.delete(
       Uri.parse('$baseUrl/generations/$id'),
       headers: headers,
     );
+    
+    if (!_isSuccess(response.statusCode)) {
+      final data = jsonDecode(response.body);
+      throw Exception(data['message'] ?? 'Failed to delete');
+    }
+  }
+
+  // Get Single Generation
+  static Future<Map<String, dynamic>> getGeneration(int id) async {
+    final headers = await _getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/generations/$id'),
+      headers: headers,
+    );
+    
+    final data = jsonDecode(response.body);
+    if (!_isSuccess(response.statusCode)) {
+      throw Exception(data['message'] ?? 'Failed to get generation');
+    }
+    return data;
+  }
+
+  // Update Profile
+  static Future<Map<String, dynamic>> updateProfile({
+    String? name,
+    String? avatar,
+  }) async {
+    final headers = await _getHeaders();
+    final body = <String, dynamic>{};
+    if (name != null) body['name'] = name;
+    if (avatar != null) body['avatar'] = avatar;
+    
+    final response = await http.put(
+      Uri.parse('$baseUrl/profile'),
+      headers: headers,
+      body: jsonEncode(body),
+    );
+    
+    final data = jsonDecode(response.body);
+    if (!_isSuccess(response.statusCode)) {
+      throw Exception(data['message'] ?? 'Failed to update profile');
+    }
+    return data;
+  }
+
+  // Change Password
+  static Future<void> changePassword({
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/change-password'),
+      headers: headers,
+      body: jsonEncode({
+        'old_password': oldPassword,
+        'new_password': newPassword,
+      }),
+    );
+    
+    if (!_isSuccess(response.statusCode)) {
+      final data = jsonDecode(response.body);
+      throw Exception(data['message'] ?? 'Failed to change password');
+    }
   }
 }

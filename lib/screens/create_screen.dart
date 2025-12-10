@@ -244,35 +244,48 @@ Ku jalani dengan ikhlas''',
 
     setState(() => _isGenerating = true);
 
-    try {
-      await context.read<MusicProvider>().generateMusic(
-        title: _titleController.text,
-        prompt: '${_selectedGenres.join(", ")} music, $_selectedMood mood, $_selectedTempo tempo${_isInstrumental ? ", instrumental" : ""}',
-        lyrics: _isInstrumental ? '[Instrumental]' : _lyricsController.text,
-        style: '${_selectedGenres.join(", ")}, $_selectedMood',
-      );
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(children: [Icon(Icons.check_circle, color: Colors.white), SizedBox(width: 8), Text('🎵 Musik sedang dibuat!')]),
-            backgroundColor: Color(0xFF84CC16),
-          ),
-        );
-        _titleController.clear();
-        _lyricsController.clear();
-        setState(() {
-          _selectedGenres = [];
-          _step = 1;
-        });
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-      );
-    }
-
+    final success = await context.read<MusicProvider>().generateMusic(
+      title: _titleController.text,
+      prompt: '${_selectedGenres.join(", ")} music, $_selectedMood mood, $_selectedTempo tempo${_isInstrumental ? ", instrumental" : ""}',
+      lyrics: _isInstrumental ? '[Instrumental]' : _lyricsController.text,
+      style: '${_selectedGenres.join(", ")}, $_selectedMood',
+    );
+    
     setState(() => _isGenerating = false);
+    
+    if (success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(children: [
+            const Icon(Icons.check_circle, color: Colors.white),
+            const SizedBox(width: 8),
+            const Expanded(child: Text('🎵 Musik sedang dibuat! Cek di tab Koleksi')),
+          ]),
+          backgroundColor: const Color(0xFF84CC16),
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: 'LIHAT',
+            textColor: Colors.black,
+            onPressed: () {
+              // Navigate to collection tab would be handled by parent
+            },
+          ),
+        ),
+      );
+      _titleController.clear();
+      _lyricsController.clear();
+      setState(() {
+        _selectedGenres = [];
+        _step = 1;
+        _lyricTheme = null;
+      });
+    } else if (!success && mounted) {
+      final error = context.read<MusicProvider>().error ?? 'Gagal membuat musik';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $error'), backgroundColor: Colors.red),
+      );
+      context.read<MusicProvider>().clearError();
+    }
   }
 
   @override
