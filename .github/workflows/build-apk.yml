@@ -25,11 +25,11 @@ jobs:
           flutter-version: '3.19.6'
           channel: 'stable'
 
-      - name: Create Flutter project structure
+      - name: Create Flutter project
         run: |
           cp -r lib lib_backup
           cp pubspec.yaml pubspec_backup.yaml
-          rm -rf android ios web linux macos windows test
+          rm -rf android ios web linux macos windows test .dart_tool
           flutter create . --org id.my.zesbe --project-name lumina_ai --platforms android
           rm -rf lib
           mv lib_backup lib
@@ -37,8 +37,60 @@ jobs:
 
       - name: Configure Android
         run: |
-          # AndroidManifest with all permissions
-          cat > android/app/src/main/AndroidManifest.xml << 'EOF'
+          # Fix Kotlin version
+          sed -i 's/ext.kotlin_version.*/ext.kotlin_version = "1.9.22"/' android/settings.gradle || true
+          
+          # Update build.gradle
+          cat > android/app/build.gradle << 'GRADLE'
+          plugins {
+              id "com.android.application"
+              id "kotlin-android"
+              id "dev.flutter.flutter-gradle-plugin"
+          }
+
+          android {
+              namespace = "id.my.zesbe.lumina_ai"
+              compileSdk = 34
+              ndkVersion = flutter.ndkVersion
+
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_1_8
+                  targetCompatibility = JavaVersion.VERSION_1_8
+              }
+
+              kotlinOptions {
+                  jvmTarget = "1.8"
+              }
+
+              defaultConfig {
+                  applicationId = "id.my.zesbe.lumina_ai"
+                  minSdk = 21
+                  targetSdk = 34
+                  versionCode = flutter.versionCode
+                  versionName = flutter.versionName
+                  multiDexEnabled true
+              }
+
+              buildTypes {
+                  release {
+                      signingConfig = signingConfigs.debug
+                      minifyEnabled false
+                      shrinkResources false
+                  }
+              }
+          }
+
+          flutter {
+              source = "../.."
+          }
+
+          dependencies {
+              implementation "androidx.multidex:multidex:2.0.1"
+          }
+          GRADLE
+          
+          # AndroidManifest
+          cat > android/app/src/main/AndroidManifest.xml << 'MANIFEST'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               xmlns:tools="http://schemas.android.com/tools">
               
@@ -46,16 +98,13 @@ jobs:
               <uses-permission android:name="android.permission.WAKE_LOCK"/>
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>
-              <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
               
               <application
                   android:label="Lumina AI"
                   android:name="${applicationName}"
                   android:icon="@mipmap/ic_launcher"
                   android:usesCleartextTraffic="true"
-                  tools:targetApi="31">
+                  tools:targetApi="34">
                   
                   <activity
                       android:name=".MainActivity"
@@ -64,9 +113,7 @@ jobs:
                       android:theme="@style/LaunchTheme"
                       android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
                       android:hardwareAccelerated="true"
-                      android:windowSoftInputMode="adjustResize"
-                      android:showWhenLocked="true"
-                      android:turnScreenOn="true">
+                      android:windowSoftInputMode="adjustResize">
                       <meta-data
                           android:name="io.flutter.embedding.android.NormalTheme"
                           android:resource="@style/NormalTheme"/>
@@ -100,25 +147,18 @@ jobs:
                       android:value="2"/>
               </application>
           </manifest>
-          EOF
-          
-          # Update build.gradle
-          sed -i 's/minSdk = .*/minSdk = 21/' android/app/build.gradle
-          sed -i 's/targetSdk = .*/targetSdk = 33/' android/app/build.gradle
+          MANIFEST
 
-      - name: Create icons
+      - name: Create Icons
         run: |
           mkdir -p android/app/src/main/res/drawable
-          mkdir -p android/app/src/main/res/drawable-v24
-          mkdir -p android/app/src/main/res/mipmap-anydpi-v26
           mkdir -p android/app/src/main/res/mipmap-hdpi
           mkdir -p android/app/src/main/res/mipmap-mdpi
           mkdir -p android/app/src/main/res/mipmap-xhdpi
           mkdir -p android/app/src/main/res/mipmap-xxhdpi
           mkdir -p android/app/src/main/res/mipmap-xxxhdpi
           
-          # Notification icon
-          cat > android/app/src/main/res/drawable/ic_notification.xml << 'EOF'
+          cat > android/app/src/main/res/drawable/ic_notification.xml << 'ICON'
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
               android:width="24dp" android:height="24dp"
@@ -126,60 +166,21 @@ jobs:
               <path android:fillColor="#FFFFFF"
                   android:pathData="M12,3v10.55c-0.59,-0.34 -1.27,-0.55 -2,-0.55c-2.21,0 -4,1.79 -4,4s1.79,4 4,4s4,-1.79 4,-4V7h4V3H12z"/>
           </vector>
-          EOF
+          ICON
           
-          # App icon foreground
-          cat > android/app/src/main/res/drawable/ic_launcher_foreground.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="108dp" android:height="108dp"
-              android:viewportWidth="108" android:viewportHeight="108">
-              <path android:fillColor="#84CC16" android:pathData="M54,54m-40,0a40,40 0,1 1,80 0a40,40 0,1 1,-80 0"/>
-              <path android:fillColor="#FFFFFF" android:pathData="M58,35v25c-1.5,-1.5 -3.5,-2.5 -6,-2.5c-4.5,0 -8,3.5 -8,8s3.5,8 8,8s8,-3.5 8,-8V43h8v-8H58z"/>
-              <path android:fillColor="#FFFFFF" android:pathData="M72,28l2,4l4,2l-4,2l-2,4l-2,-4l-4,-2l4,-2z"/>
-          </vector>
-          EOF
-          cp android/app/src/main/res/drawable/ic_launcher_foreground.xml android/app/src/main/res/drawable-v24/
-          
-          # App icon background
-          cat > android/app/src/main/res/drawable/ic_launcher_background.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="108dp" android:height="108dp"
-              android:viewportWidth="108" android:viewportHeight="108">
-              <path android:fillColor="#0D0D0D" android:pathData="M0,0h108v108H0z"/>
-          </vector>
-          EOF
-          
-          # Adaptive icon
-          cat > android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-              <background android:drawable="@drawable/ic_launcher_background"/>
-              <foreground android:drawable="@drawable/ic_launcher_foreground"/>
-          </adaptive-icon>
-          EOF
-          cp android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
-          
-          # Generate PNG icons
           sudo apt-get update && sudo apt-get install -y imagemagick
           for size in 48:mdpi 72:hdpi 96:xhdpi 144:xxhdpi 192:xxxhdpi; do
             IFS=':' read px density <<< "$size"
             convert -size ${px}x${px} xc:'#0D0D0D' -fill '#84CC16' \
               -draw "circle $((px/2)),$((px/2)) $((px/2)),$((px/6))" \
               android/app/src/main/res/mipmap-${density}/ic_launcher.png
-            cp android/app/src/main/res/mipmap-${density}/ic_launcher.png \
-               android/app/src/main/res/mipmap-${density}/ic_launcher_round.png
           done
 
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Analyze code
-        run: flutter analyze --no-fatal-infos || true
-
       - name: Build APK
-        run: flutter build apk --release
+        run: flutter build apk --release --no-tree-shake-icons
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
