@@ -22,7 +22,7 @@ jobs:
           flutter-version: '3.19.6'
           channel: 'stable'
 
-      - name: Setup Android project
+      - name: Setup project
         run: |
           cp -r lib lib_backup
           cp pubspec.yaml pubspec_backup.yaml
@@ -31,16 +31,25 @@ jobs:
           rm -rf lib
           mv lib_backup lib
           mv pubspec_backup.yaml pubspec.yaml
-          
-          # Simple AndroidManifest
+
+      - name: Configure Android
+        run: |
           cat > android/app/src/main/AndroidManifest.xml << 'EOF'
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:tools="http://schemas.android.com/tools">
+              
               <uses-permission android:name="android.permission.INTERNET"/>
+              <uses-permission android:name="android.permission.WAKE_LOCK"/>
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+              
               <application
                   android:label="Lumina AI"
                   android:name="${applicationName}"
                   android:icon="@mipmap/ic_launcher"
-                  android:usesCleartextTraffic="true">
+                  android:usesCleartextTraffic="true"
+                  tools:targetApi="34">
+                  
                   <activity
                       android:name=".MainActivity"
                       android:exported="true"
@@ -56,12 +65,37 @@ jobs:
                           <category android:name="android.intent.category.LAUNCHER"/>
                       </intent-filter>
                   </activity>
+                  
+                  <service 
+                      android:name="com.ryanheise.audioservice.AudioService"
+                      android:foregroundServiceType="mediaPlayback"
+                      android:exported="true"
+                      tools:ignore="Instantiatable">
+                      <intent-filter>
+                          <action android:name="android.media.browse.MediaBrowserService"/>
+                      </intent-filter>
+                  </service>
+                  
+                  <receiver 
+                      android:name="com.ryanheise.audioservice.MediaButtonReceiver"
+                      android:exported="true"
+                      tools:ignore="Instantiatable">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MEDIA_BUTTON"/>
+                      </intent-filter>
+                  </receiver>
+                  
                   <meta-data android:name="flutterEmbedding" android:value="2"/>
               </application>
           </manifest>
           EOF
+          
+          # Fix build.gradle
+          sed -i 's/minSdk.*/minSdk = 21/' android/app/build.gradle
+          sed -i 's/targetSdk.*/targetSdk = 34/' android/app/build.gradle
+          sed -i 's/compileSdk.*/compileSdk = 34/' android/app/build.gradle
 
-      - name: Create app icon
+      - name: Create icons
         run: |
           sudo apt-get update && sudo apt-get install -y imagemagick
           for size in 48:mdpi 72:hdpi 96:xhdpi 144:xxhdpi 192:xxxhdpi; do

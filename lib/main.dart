@@ -38,11 +38,7 @@ class MyApp extends StatefulWidget {
   final PlayerProvider playerProvider;
   final bool showOnboarding;
   
-  const MyApp({
-    super.key, 
-    required this.playerProvider,
-    required this.showOnboarding,
-  });
+  const MyApp({super.key, required this.playerProvider, required this.showOnboarding});
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -55,10 +51,6 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     _showOnboarding = widget.showOnboarding;
-  }
-
-  void _completeOnboarding() {
-    setState(() => _showOnboarding = false);
   }
 
   @override
@@ -82,13 +74,9 @@ class _MyAppState extends State<MyApp> {
             surface: Color(0xFF1A1A1A),
           ),
           textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
-          appBarTheme: const AppBarTheme(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-          ),
         ),
         home: _showOnboarding 
-            ? OnboardingScreen(onComplete: _completeOnboarding)
+            ? OnboardingScreen(onComplete: () => setState(() => _showOnboarding = false))
             : const AuthWrapper(),
       ),
     );
@@ -101,7 +89,6 @@ class AuthWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    
     if (auth.isLoading) return const SplashScreen();
     if (auth.isAuthenticated) return const MainScreen();
     return const LoginScreen();
