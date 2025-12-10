@@ -86,14 +86,36 @@ class _MyAppState extends State<MyApp> {
   }
 }
 
-class AuthWrapper extends StatelessWidget {
+class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
+
+  @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  bool _musicInitialized = false;
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    
     if (auth.isLoading) return const SplashScreen();
-    if (auth.isAuthenticated) return const MainScreen();
+    
+    if (auth.isAuthenticated) {
+      // Initialize music provider once when authenticated
+      if (!_musicInitialized) {
+        _musicInitialized = true;
+        // Use addPostFrameCallback to avoid calling during build
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          context.read<MusicProvider>().init();
+        });
+      }
+      return const MainScreen();
+    }
+    
+    // Reset when logged out
+    _musicInitialized = false;
     return const LoginScreen();
   }
 }

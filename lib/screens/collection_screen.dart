@@ -21,8 +21,12 @@ class _CollectionScreenState extends State<CollectionScreen> with SingleTickerPr
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    // Only load if no data yet (data is pre-loaded on login)
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<MusicProvider>().loadGenerations();
+      final music = context.read<MusicProvider>();
+      if (!music.hasData) {
+        music.loadGenerations();
+      }
     });
   }
 

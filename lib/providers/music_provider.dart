@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../models/generation.dart';
 import '../services/api_service.dart';
 
@@ -7,6 +9,8 @@ class MusicProvider with ChangeNotifier {
   bool _isLoading = false;
   bool _isGenerating = false;
   String? _error;
+  Timer? _pollingTimer;
+  bool _hasInitialLoad = false;
 
   List<Generation> get generations => _generations;
   List<Generation> get completed => _generations.where((g) => g.status == 'completed').toList();
@@ -14,21 +18,67 @@ class MusicProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isGenerating => _isGenerating;
   String? get error => _error;
+  bool get hasData => _generations.isNotEmpty;
 
-  Future<void> loadGenerations() async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
+  // Initialize and start loading
+  void init() {
+    if (!_hasInitialLoad) {
+      loadGenerations();
+    }
+  }
+
+  // Load generations with optional force refresh
+  Future<void> loadGenerations({bool silent = false}) async {
+    if (!silent) {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+    }
 
     try {
       final data = await ApiService.getGenerations(type: 'music');
       _generations = data.map((json) => Generation.fromJson(json)).toList();
+      _hasInitialLoad = true;
+      
+      // Pre-cache album art images
+      _preCacheImages();
+      
+      // Start polling if there are processing items
+      _checkAndStartPolling();
+      
     } catch (e) {
       _error = e.toString().replaceAll('Exception: ', '');
     }
 
-    _isLoading = false;
+    if (!silent) {
+      _isLoading = false;
+    }
     notifyListeners();
+  }
+
+  // Pre-cache images for faster display
+  void _preCacheImages() {
+    for (final gen in _generations) {
+      if (gen.fullThumbnailUrl.isNotEmpty) {
+        // This triggers the cache
+        CachedNetworkImageProvider(gen.fullThumbnailUrl);
+      }
+    }
+  }
+
+  // Auto-poll when there are processing items
+  void _checkAndStartPolling() {
+    final hasProcessing = _generations.any((g) => g.status == 'processing');
+    
+    if (hasProcessing && _pollingTimer == null) {
+      // Poll every 5 seconds for processing items
+      _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+        loadGenerations(silent: true);
+      });
+    } else if (!hasProcessing && _pollingTimer != null) {
+      _pollingTimer?.cancel();
+      _pollingTimer = null;
+    }
   }
 
   Future<bool> generateMusic({
@@ -49,17 +99,18 @@ class MusicProvider with ChangeNotifier {
         style: style,
       );
       
-      // Add new generation to list if returned
+      // Add new generation to list immediately
       if (result['generation'] != null) {
         final newGen = Generation.fromJson(result['generation']);
         _generations.insert(0, newGen);
+        notifyListeners();
       }
       
       _isGenerating = false;
       notifyListeners();
       
-      // Reload after a short delay to get updated status
-      Future.delayed(const Duration(seconds: 3), () => loadGenerations());
+      // Start polling for this new processing item
+      _checkAndStartPolling();
       
       return true;
     } catch (e) {
@@ -91,12 +142,13 @@ class MusicProvider with ChangeNotifier {
       if (result['generation'] != null) {
         final newGen = Generation.fromJson(result['generation']);
         _generations.insert(0, newGen);
+        notifyListeners();
       }
       
       _isGenerating = false;
       notifyListeners();
       
-      Future.delayed(const Duration(seconds: 2), () => loadGenerations());
+      _checkAndStartPolling();
       
       return true;
     } catch (e) {
@@ -126,12 +178,13 @@ class MusicProvider with ChangeNotifier {
       if (result['generation'] != null) {
         final newGen = Generation.fromJson(result['generation']);
         _generations.insert(0, newGen);
+        notifyListeners();
       }
       
       _isGenerating = false;
       notifyListeners();
       
-      Future.delayed(const Duration(seconds: 2), () => loadGenerations());
+      _checkAndStartPolling();
       
       return true;
     } catch (e) {
@@ -142,75 +195,133 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
+  // Optimistic update - update UI immediately, then sync with server
   Future<void> toggleFavorite(int id) async {
+    // Optimistic update
+    final index = _generations.indexWhere((g) => g.id == id);
+    if (index != -1) {
+      final old = _generations[index];
+      _generations[index] = _copyWithFavorite(old, !old.isFavorite);
+      notifyListeners();
+    }
+
     try {
       await ApiService.toggleFavorite(id);
-      final index = _generations.indexWhere((g) => g.id == id);
+    } catch (e) {
+      // Revert on error
       if (index != -1) {
-        final old = _generations[index];
-        _generations[index] = Generation(
-          id: old.id,
-          type: old.type,
-          status: old.status,
-          title: old.title,
-          prompt: old.prompt,
-          style: old.style,
-          lyrics: old.lyrics,
-          outputUrl: old.outputUrl,
-          thumbnailUrl: old.thumbnailUrl,
-          isFavorite: !old.isFavorite,
-          isPublic: old.isPublic,
-          createdAt: old.createdAt,
-        );
+        final current = _generations[index];
+        _generations[index] = _copyWithFavorite(current, !current.isFavorite);
         notifyListeners();
       }
-    } catch (e) {
       _error = e.toString().replaceAll('Exception: ', '');
       notifyListeners();
     }
   }
 
+  // Optimistic update for public toggle
   Future<void> togglePublic(int id) async {
+    // Optimistic update
+    final index = _generations.indexWhere((g) => g.id == id);
+    if (index != -1) {
+      final old = _generations[index];
+      _generations[index] = _copyWithPublic(old, !old.isPublic);
+      notifyListeners();
+    }
+
     try {
       await ApiService.togglePublic(id);
-      final index = _generations.indexWhere((g) => g.id == id);
+    } catch (e) {
+      // Revert on error
       if (index != -1) {
-        final old = _generations[index];
-        _generations[index] = Generation(
-          id: old.id,
-          type: old.type,
-          status: old.status,
-          title: old.title,
-          prompt: old.prompt,
-          style: old.style,
-          lyrics: old.lyrics,
-          outputUrl: old.outputUrl,
-          thumbnailUrl: old.thumbnailUrl,
-          isFavorite: old.isFavorite,
-          isPublic: !old.isPublic,
-          createdAt: old.createdAt,
-        );
+        final current = _generations[index];
+        _generations[index] = _copyWithPublic(current, !current.isPublic);
         notifyListeners();
       }
-    } catch (e) {
       _error = e.toString().replaceAll('Exception: ', '');
       notifyListeners();
     }
   }
 
   Future<void> delete(int id) async {
+    // Optimistic delete
+    final index = _generations.indexWhere((g) => g.id == id);
+    Generation? backup;
+    if (index != -1) {
+      backup = _generations[index];
+      _generations.removeAt(index);
+      notifyListeners();
+    }
+
     try {
       await ApiService.deleteGeneration(id);
-      _generations.removeWhere((g) => g.id == id);
-      notifyListeners();
     } catch (e) {
+      // Revert on error
+      if (backup != null && index != -1) {
+        _generations.insert(index, backup);
+        notifyListeners();
+      }
       _error = e.toString().replaceAll('Exception: ', '');
       notifyListeners();
     }
   }
 
+  // Helper to copy Generation with new favorite value
+  Generation _copyWithFavorite(Generation old, bool isFavorite) {
+    return Generation(
+      id: old.id,
+      type: old.type,
+      status: old.status,
+      title: old.title,
+      prompt: old.prompt,
+      style: old.style,
+      lyrics: old.lyrics,
+      outputUrl: old.outputUrl,
+      thumbnailUrl: old.thumbnailUrl,
+      isFavorite: isFavorite,
+      isPublic: old.isPublic,
+      createdAt: old.createdAt,
+      artist: old.artist,
+      album: old.album,
+      duration: old.duration,
+      genre: old.genre,
+      mood: old.mood,
+      model: old.model,
+    );
+  }
+
+  // Helper to copy Generation with new public value
+  Generation _copyWithPublic(Generation old, bool isPublic) {
+    return Generation(
+      id: old.id,
+      type: old.type,
+      status: old.status,
+      title: old.title,
+      prompt: old.prompt,
+      style: old.style,
+      lyrics: old.lyrics,
+      outputUrl: old.outputUrl,
+      thumbnailUrl: old.thumbnailUrl,
+      isFavorite: old.isFavorite,
+      isPublic: isPublic,
+      createdAt: old.createdAt,
+      artist: old.artist,
+      album: old.album,
+      duration: old.duration,
+      genre: old.genre,
+      mood: old.mood,
+      model: old.model,
+    );
+  }
+
   void clearError() {
     _error = null;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _pollingTimer?.cancel();
+    super.dispose();
   }
 }
