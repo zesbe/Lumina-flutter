@@ -677,7 +677,7 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
                 _downloadMusic(song);
               },
             ),
-            if (song.cleanedLyrics.isNotEmpty && song.cleanedLyrics.isNotEmpty)
+            if (song.cleanedLyrics.isNotEmpty)
               ListTile(
                 leading: const Icon(Icons.text_snippet, color: Color(0xFF84CC16)),
                 title: const Text('Download Lirik'),
@@ -736,7 +736,7 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
 
   Future<void> _downloadLyrics(dynamic song) async {
     final path = await DownloadService.downloadLyrics(
-      lyrics: song.cleanedLyrics?? '',
+      lyrics: song.cleanedLyrics ??  '',
       title: song.title,
       artist: song.displayArtist,
       style: song.displayGenre,

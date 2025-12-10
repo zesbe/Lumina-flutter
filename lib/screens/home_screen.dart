@@ -200,7 +200,7 @@ class _SongCard extends StatelessWidget {
           ),
 
           // Lyrics overlay
-          if (showLyrics && song.cleanedLyrics.isNotEmpty && song.cleanedLyrics.isNotEmpty)
+          if (showLyrics && song.cleanedLyrics.isNotEmpty)
             Container(
               color: Colors.black.withOpacity(0.85),
               padding: const EdgeInsets.all(24),
