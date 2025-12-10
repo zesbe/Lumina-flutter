@@ -493,7 +493,7 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
           const SizedBox(height: 8),
           
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
@@ -506,14 +506,7 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
                     _showInfo = false;
                   }),
                 ),
-                _SmallActionButton(
-                  icon: Icons.bedtime,
-                  label: player.hasSleepTimer ? _formatTimerShort(player.sleepTimerRemaining) : 'Timer',
-                  isActive: player.hasSleepTimer,
-                  activeColor: Colors.amber,
-                  onTap: () => _showSleepTimerDialog(context, player),
-                ),
-                // Favorite button - different behavior for public vs own songs
+                // Favorite button
                 _SmallActionButton(
                   icon: isPublic
                       ? (isLikedPublic ? Icons.favorite : Icons.favorite_border)
@@ -530,7 +523,24 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
                     }
                   },
                 ),
-                // Download button - only show for OWN songs, not public
+                // Public/Private toggle - only for OWN songs
+                if (!isPublic)
+                  _SmallActionButton(
+                    icon: song.isPublic ? Icons.public : Icons.lock,
+                    label: song.isPublic ? 'Publik' : 'Private',
+                    isActive: song.isPublic,
+                    activeColor: Colors.green,
+                    onTap: () => _showPublicToggleModal(context, song, music),
+                  )
+                else
+                  _SmallActionButton(
+                    icon: Icons.person,
+                    label: 'Kreator',
+                    isActive: true,
+                    activeColor: Colors.blue,
+                    onTap: () => _showSnackBar('Dibuat oleh ${song.creatorName}'),
+                  ),
+                // Download - only for own songs
                 if (!isPublic)
                   _SmallActionButton(
                     icon: Icons.download,
@@ -539,11 +549,9 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
                   )
                 else
                   _SmallActionButton(
-                    icon: Icons.public,
-                    label: 'Publik',
-                    isActive: true,
-                    activeColor: Colors.blue,
-                    onTap: () => _showSnackBar('Musik ini dari kreator lain'),
+                    icon: Icons.block,
+                    label: 'No DL',
+                    onTap: () => _showSnackBar('Download tidak tersedia untuk musik publik'),
                   ),
                 _SmallActionButton(
                   icon: _showInfo ? Icons.info : Icons.info_outline,
@@ -709,6 +717,186 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
               ],
             ),
             const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showPublicToggleModal(BuildContext context, dynamic song, MusicProvider music) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        margin: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header with gradient
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: song.isPublic
+                      ? [Colors.green.withOpacity(0.2), Colors.green.withOpacity(0.05)]
+                      : [Colors.grey.withOpacity(0.2), Colors.grey.withOpacity(0.05)],
+                ),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[700],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: song.isPublic ? Colors.green.withOpacity(0.2) : Colors.grey.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(40),
+                    ),
+                    child: Icon(
+                      song.isPublic ? Icons.public : Icons.lock,
+                      size: 40,
+                      color: song.isPublic ? Colors.green : Colors.grey,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    song.isPublic ? 'Musik Publik' : 'Musik Private',
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    song.title,
+                    style: TextStyle(color: Colors.grey[400], fontSize: 14),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+
+            // Status Info
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          song.isPublic ? Icons.visibility : Icons.visibility_off,
+                          color: song.isPublic ? Colors.green : Colors.grey,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                song.isPublic ? 'Tampil di Explore' : 'Tersembunyi',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              Text(
+                                song.isPublic
+                                    ? 'Semua pengguna bisa mendengarkan'
+                                    : 'Hanya kamu yang bisa melihat',
+                                style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  if (song.isPublic)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.info_outline, color: Colors.blue, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Pengguna lain tidak bisa download musik kamu',
+                              style: TextStyle(color: Colors.grey[300], fontSize: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
+            // Action Buttons
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.grey,
+                        side: BorderSide(color: Colors.grey[700]!),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: const Text('Tutup'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        await music.togglePublic(song.id);
+                        if (context.mounted) {
+                          Navigator.pop(ctx);
+                          _showSnackBar(
+                            song.isPublic ? '🔒 Musik sekarang Private' : '🌐 Musik sekarang Public!',
+                          );
+                        }
+                      },
+                      icon: Icon(song.isPublic ? Icons.lock : Icons.public),
+                      label: Text(song.isPublic ? 'Jadikan Private' : 'Jadikan Public'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: song.isPublic ? Colors.grey[700] : Colors.green,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
