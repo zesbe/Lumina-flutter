@@ -35,12 +35,79 @@ jobs:
           mv lib_backup lib
           mv pubspec_backup.yaml pubspec.yaml
 
-      - name: Add Internet Permission
+      - name: Configure Android for Audio Service
         run: |
-          # Add internet permission to debug manifest
-          sed -i 's/<manifest/<manifest xmlns:tools="http:\/\/schemas.android.com\/tools"/' android/app/src/main/AndroidManifest.xml
-          sed -i '/<manifest/a\    <uses-permission android:name="android.permission.INTERNET"\/>' android/app/src/main/AndroidManifest.xml
-          sed -i 's/<application/<application android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
+          # Add permissions and services to AndroidManifest
+          cat > android/app/src/main/AndroidManifest.xml << 'MANIFESTEOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              
+              <uses-permission android:name="android.permission.INTERNET"/>
+              <uses-permission android:name="android.permission.WAKE_LOCK"/>
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+              
+              <application
+                  android:label="Lumina AI"
+                  android:name="${applicationName}"
+                  android:icon="@mipmap/ic_launcher"
+                  android:usesCleartextTraffic="true">
+                  
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:launchMode="singleTop"
+                      android:theme="@style/LaunchTheme"
+                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+                      android:hardwareAccelerated="true"
+                      android:windowSoftInputMode="adjustResize">
+                      <meta-data
+                          android:name="io.flutter.embedding.android.NormalTheme"
+                          android:resource="@style/NormalTheme"/>
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                  </activity>
+                  
+                  <!-- Audio Service -->
+                  <service
+                      android:name="com.ryanheise.audioservice.AudioService"
+                      android:foregroundServiceType="mediaPlayback"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.media.browse.MediaBrowserService"/>
+                      </intent-filter>
+                  </service>
+                  
+                  <receiver
+                      android:name="com.ryanheise.audioservice.MediaButtonReceiver"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MEDIA_BUTTON"/>
+                      </intent-filter>
+                  </receiver>
+                  
+                  <meta-data
+                      android:name="flutterEmbedding"
+                      android:value="2"/>
+              </application>
+          </manifest>
+          MANIFESTEOF
+          
+          # Create notification icon (simple music note)
+          mkdir -p android/app/src/main/res/drawable
+          cat > android/app/src/main/res/drawable/ic_notification.xml << 'ICONEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="24dp"
+              android:height="24dp"
+              android:viewportWidth="24"
+              android:viewportHeight="24">
+              <path
+                  android:fillColor="#FFFFFF"
+                  android:pathData="M12,3v10.55c-0.59,-0.34 -1.27,-0.55 -2,-0.55c-2.21,0 -4,1.79 -4,4s1.79,4 4,4s4,-1.79 4,-4V7h4V3H12z"/>
+          </vector>
+          ICONEOF
 
       - name: Get dependencies
         run: flutter pub get

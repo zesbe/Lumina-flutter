@@ -1,15 +1,18 @@
 import 'package:flutter/foundation.dart';
+import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 import '../models/generation.dart';
+import '../services/audio_handler.dart';
 
 class PlayerProvider with ChangeNotifier {
-  final AudioPlayer _player = AudioPlayer();
+  AudioPlayerHandler? _audioHandler;
   Generation? _currentSong;
   List<Generation> _playlist = [];
   int _currentIndex = 0;
   bool _isPlaying = false;
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
+  bool _isInitialized = false;
 
   Generation? get currentSong => _currentSong;
   List<Generation> get playlist => _playlist;
@@ -20,22 +23,52 @@ class PlayerProvider with ChangeNotifier {
       ? _position.inMilliseconds / _duration.inMilliseconds 
       : 0;
 
-  PlayerProvider() {
+  Future<void> init() async {
+    if (_isInitialized) return;
+    
+    try {
+      _audioHandler = await AudioService.init(
+        builder: () => AudioPlayerHandler(),
+        config: const AudioServiceConfig(
+          androidNotificationChannelId: 'id.my.zesbe.luminaai.audio',
+          androidNotificationChannelName: 'Lumina AI Music',
+          androidNotificationOngoing: true,
+          androidStopForegroundOnPause: true,
+          androidNotificationIcon: 'drawable/ic_notification',
+        ),
+      );
+      
+      _setupListeners();
+      _isInitialized = true;
+      debugPrint('[Player] AudioService initialized');
+    } catch (e) {
+      debugPrint('[Player] AudioService init failed: $e');
+      // Fallback to simple player without notification
+      _setupSimplePlayer();
+    }
+  }
+
+  void _setupSimplePlayer() {
+    // Fallback without audio_service
+    _audioHandler = AudioPlayerHandler();
     _setupListeners();
+    _isInitialized = true;
   }
 
   void _setupListeners() {
-    _player.positionStream.listen((pos) {
+    if (_audioHandler == null) return;
+    
+    _audioHandler!.player.positionStream.listen((pos) {
       _position = pos;
       notifyListeners();
     });
     
-    _player.durationStream.listen((dur) {
+    _audioHandler!.player.durationStream.listen((dur) {
       _duration = dur ?? Duration.zero;
       notifyListeners();
     });
     
-    _player.playerStateStream.listen((state) {
+    _audioHandler!.player.playerStateStream.listen((state) {
       _isPlaying = state.playing;
       if (state.processingState == ProcessingState.completed) {
         playNext();
@@ -50,25 +83,32 @@ class PlayerProvider with ChangeNotifier {
 
   Future<void> play(Generation song) async {
     if (song.fullOutputUrl.isEmpty) return;
+    if (!_isInitialized) await init();
     
     _currentSong = song;
     _currentIndex = _playlist.indexWhere((s) => s.id == song.id);
     if (_currentIndex < 0) _currentIndex = 0;
     
     try {
-      await _player.setUrl(song.fullOutputUrl);
-      await _player.play();
+      await _audioHandler?.playUrl(
+        song.fullOutputUrl,
+        title: song.title,
+        artist: song.style ?? 'AI Generated',
+        artUrl: song.fullThumbnailUrl.isNotEmpty ? song.fullThumbnailUrl : null,
+      );
     } catch (e) {
-      debugPrint('Error playing: $e');
+      debugPrint('[Player] Error playing: $e');
     }
     notifyListeners();
   }
 
   Future<void> togglePlay() async {
+    if (!_isInitialized) return;
+    
     if (_isPlaying) {
-      await _player.pause();
+      await _audioHandler?.pause();
     } else {
-      await _player.play();
+      await _audioHandler?.play();
     }
   }
 
@@ -86,12 +126,19 @@ class PlayerProvider with ChangeNotifier {
 
   Future<void> seek(double percent) async {
     final newPosition = Duration(milliseconds: (percent * _duration.inMilliseconds).toInt());
-    await _player.seek(newPosition);
+    await _audioHandler?.seek(newPosition);
+  }
+
+  Future<void> stop() async {
+    await _audioHandler?.stop();
+    _currentSong = null;
+    _isPlaying = false;
+    notifyListeners();
   }
 
   @override
   void dispose() {
-    _player.dispose();
+    _audioHandler?.dispose();
     super.dispose();
   }
 }
