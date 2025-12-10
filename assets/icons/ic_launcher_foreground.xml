@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Background circle gradient effect -->
+    <path
+        android:fillColor="#84CC16"
+        android:pathData="M54,54m-40,0a40,40 0,1 1,80 0a40,40 0,1 1,-80 0"/>
+    
+    <!-- Inner glow -->
+    <path
+        android:fillColor="#9AE625"
+        android:pathData="M54,54m-32,0a32,32 0,1 1,64 0a32,32 0,1 1,-64 0"
+        android:fillAlpha="0.3"/>
+    
+    <!-- Music note symbol -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M58,35v25c-1.5,-1.5 -3.5,-2.5 -6,-2.5c-4.5,0 -8,3.5 -8,8s3.5,8 8,8s8,-3.5 8,-8V43h8v-8H58z"/>
+    
+    <!-- AI Sparkle 1 (top right) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M72,28l2,4l4,2l-4,2l-2,4l-2,-4l-4,-2l4,-2z"/>
+    
+    <!-- AI Sparkle 2 (small, top) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.8"
+        android:pathData="M62,24l1,2l2,1l-2,1l-1,2l-1,-2l-2,-1l2,-1z"/>
+    
+    <!-- AI Sparkle 3 (bottom left) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.6"
+        android:pathData="M36,70l1.5,3l3,1.5l-3,1.5l-1.5,3l-1.5,-3l-3,-1.5l3,-1.5z"/>
+</vector>
