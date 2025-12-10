@@ -11,11 +11,9 @@ class Generation {
   final bool isFavorite;
   final DateTime? createdAt;
   final String? errorMessage;
-  
-  // Additional metadata
   final String? artist;
   final String? album;
-  final int? duration; // in seconds
+  final int? duration;
   final String? genre;
   final String? mood;
   final String? model;
@@ -49,7 +47,7 @@ class Generation {
       title: json['title'] ?? 'Untitled',
       prompt: json['prompt'],
       style: json['style'],
-      lyrics: json['lyrics'],
+      lyrics: _cleanLyrics(json['lyrics']),
       outputUrl: json['output_url'],
       thumbnailUrl: json['thumbnail_url'],
       isFavorite: json['is_favorite'] ?? false,
@@ -65,6 +63,34 @@ class Generation {
       model: json['model'] ?? 'music-2.0',
     );
   }
+
+  static String? _cleanLyrics(String? lyrics) {
+    if (lyrics == null || lyrics.isEmpty) return lyrics;
+    
+    String cleaned = lyrics
+      .replaceAll('â≡!', '')
+      .replaceAll('â€™', "'")
+      .replaceAll('â€"', '-')
+      .replaceAll('â€œ', '"')
+      .replaceAll('â€', '"')
+      .replaceAll('Ã©', 'e')
+      .replaceAll('Ã¡', 'a')
+      .replaceAll('Ã±', 'n')
+      .replaceAll('Ã³', 'o')
+      .replaceAll('Ã­', 'i')
+      .replaceAll('Ã¼', 'u')
+      .replaceAll('â™ª', '')
+      .replaceAll('â™«', '')
+      .replaceAll('âˆ!', '')
+      .replaceAll(RegExp(r'[â][^\s\n]{1,3}'), '')
+      .replaceAll(RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F]'), '')
+      .trim();
+    
+    cleaned = cleaned.replaceAll(RegExp(r'\n{3,}'), '\n\n');
+    return cleaned;
+  }
+
+  String get cleanedLyrics => _cleanLyrics(lyrics) ?? '';
 
   String get fullOutputUrl {
     if (outputUrl == null || outputUrl!.isEmpty) return '';
@@ -91,31 +117,19 @@ class Generation {
     final diff = now.difference(createdAt!);
     
     if (diff.inDays == 0) {
-      if (diff.inHours == 0) {
-        return '${diff.inMinutes} menit lalu';
-      }
+      if (diff.inHours == 0) return '${diff.inMinutes} menit lalu';
       return '${diff.inHours} jam lalu';
     } else if (diff.inDays < 7) {
       return '${diff.inDays} hari lalu';
-    } else {
-      return '${createdAt!.day}/${createdAt!.month}/${createdAt!.year}';
     }
+    return '${createdAt!.day}/${createdAt!.month}/${createdAt!.year}';
   }
 
-  String get productionYear {
-    return createdAt?.year.toString() ?? DateTime.now().year.toString();
-  }
-
-  String get displayArtist {
-    return artist ?? 'Lumina AI';
-  }
-
-  String get displayAlbum {
-    return album ?? 'AI Generated';
-  }
+  String get productionYear => createdAt?.year.toString() ?? DateTime.now().year.toString();
+  String get displayArtist => artist ?? 'Lumina AI';
+  String get displayAlbum => album ?? 'AI Generated';
 
   String get displayGenre {
-    // Extract genre from style if available
     if (style != null && style!.isNotEmpty) {
       final parts = style!.split(',');
       if (parts.isNotEmpty) return parts.first.trim();

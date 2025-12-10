@@ -323,8 +323,8 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
           ),
           
           Expanded(
-            child: _showLyrics && song.lyrics != null
-                ? _buildLyricsView(song.lyrics!)
+            child: _showLyrics && song.cleanedLyrics.isNotEmpty
+                ? _buildLyricsView(song.cleanedLyrics)
                 : _showInfo
                     ? _buildInfoView(song)
                     : _buildAlbumArt(song),
@@ -677,7 +677,7 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
                 _downloadMusic(song);
               },
             ),
-            if (song.lyrics != null && song.lyrics!.isNotEmpty)
+            if (song.cleanedLyrics.isNotEmpty && song.cleanedLyrics.isNotEmpty)
               ListTile(
                 leading: const Icon(Icons.text_snippet, color: Color(0xFF84CC16)),
                 title: const Text('Download Lirik'),
@@ -736,7 +736,7 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
 
   Future<void> _downloadLyrics(dynamic song) async {
     final path = await DownloadService.downloadLyrics(
-      lyrics: song.lyrics ?? '',
+      lyrics: song.cleanedLyrics?? '',
       title: song.title,
       artist: song.displayArtist,
       style: song.displayGenre,
