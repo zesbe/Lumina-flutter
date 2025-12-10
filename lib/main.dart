@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'providers/auth_provider.dart';
@@ -22,16 +21,42 @@ void main() async {
     ),
   );
   
-  final prefs = await SharedPreferences.getInstance();
-  final onboardingComplete = prefs.getBool('onboarding_complete') ?? false;
-  
-  final playerProvider = PlayerProvider();
-  await playerProvider.init();
-  
-  runApp(MyApp(
-    playerProvider: playerProvider,
-    showOnboarding: !onboardingComplete,
-  ));
+  // Wrap everything in try-catch to prevent crashes
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final onboardingComplete = prefs.getBool('onboarding_complete') ?? false;
+    
+    final playerProvider = PlayerProvider();
+    
+    // Don't await - let it init in background
+    playerProvider.init().catchError((e) {
+      debugPrint('[Main] Player init error: $e');
+    });
+    
+    runApp(MyApp(
+      playerProvider: playerProvider,
+      showOnboarding: !onboardingComplete,
+    ));
+  } catch (e) {
+    debugPrint('[Main] Startup error: $e');
+    runApp(const ErrorApp());
+  }
+}
+
+class ErrorApp extends StatelessWidget {
+  const ErrorApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        backgroundColor: const Color(0xFF0D0D0D),
+        body: Center(
+          child: Text('Error starting app', style: TextStyle(color: Colors.white)),
+        ),
+      ),
+    );
+  }
 }
 
 class MyApp extends StatefulWidget {
@@ -73,7 +98,7 @@ class _MyAppState extends State<MyApp> {
             secondary: Color(0xFF22C55E),
             surface: Color(0xFF1A1A1A),
           ),
-          textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
+          fontFamily: 'Roboto',
         ),
         home: _showOnboarding 
             ? OnboardingScreen(onComplete: () => setState(() => _showOnboarding = false))
