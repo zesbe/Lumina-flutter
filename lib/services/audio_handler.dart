@@ -73,14 +73,10 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
   Future<void> seek(Duration position) => _player.seek(position);
 
   @override
-  Future<void> skipToNext() async {
-    debugPrint('[Audio] Skip next');
-  }
+  Future<void> skipToNext() async {}
 
   @override
-  Future<void> skipToPrevious() async {
-    debugPrint('[Audio] Skip prev');
-  }
+  Future<void> skipToPrevious() async {}
 }
 
 late AudioPlayerHandler audioHandler;
@@ -91,8 +87,7 @@ Future<void> initAudioService() async {
     config: const AudioServiceConfig(
       androidNotificationChannelId: 'id.my.zesbe.lumina.audio',
       androidNotificationChannelName: 'Lumina AI',
-      androidNotificationOngoing: true,
-      androidStopForegroundOnPause: false,
+      androidStopForegroundOnPause: true,
     ),
   );
 }
