@@ -28,35 +28,47 @@ jobs:
       - name: Create Flutter project
         run: |
           cp -r lib lib_backup
-          cp -r assets assets_backup 2>/dev/null || true
+          cp -r assets assets_backup 2>/dev/null || mkdir -p assets_backup/icons
           cp pubspec.yaml pubspec_backup.yaml
           rm -rf android ios web linux macos windows test
           flutter create . --org id.my.zesbe --project-name lumina_ai --platforms android
-          rm -rf lib
+          rm -rf lib assets
           mv lib_backup lib
-          rm -rf assets
-          mv assets_backup assets 2>/dev/null || mkdir -p assets/icons
+          mv assets_backup assets
           mv pubspec_backup.yaml pubspec.yaml
 
-      - name: Configure Android
+      - name: Configure Android for Background Playback
         run: |
-          # Main AndroidManifest with full audio service config
+          # Full AndroidManifest with background playback support
           cat > android/app/src/main/AndroidManifest.xml << 'MANIFESTEOF'
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:tools="http://schemas.android.com/tools">
+              
+              <!-- Network -->
               <uses-permission android:name="android.permission.INTERNET"/>
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+              
+              <!-- Background playback -->
               <uses-permission android:name="android.permission.WAKE_LOCK"/>
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+              
+              <!-- Storage for downloads -->
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
+                  android:maxSdkVersion="29"/>
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+                  android:maxSdkVersion="29"/>
+              
+              <!-- Keep playing when screen off -->
               <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
               
               <application
                   android:label="Lumina AI"
                   android:name="${applicationName}"
                   android:icon="@mipmap/ic_launcher"
-                  android:usesCleartextTraffic="true">
+                  android:usesCleartextTraffic="true"
+                  tools:targetApi="31">
                   
+                  <!-- Main Activity -->
                   <activity
                       android:name=".MainActivity"
                       android:exported="true"
@@ -76,29 +88,22 @@ jobs:
                       </intent-filter>
                   </activity>
                   
-                  <!-- Audio Service for notification controls -->
+                  <!-- Audio Service - Background Music Playback -->
                   <service
                       android:name="com.ryanheise.audioservice.AudioService"
                       android:foregroundServiceType="mediaPlayback"
-                      android:exported="true">
+                      android:exported="true"
+                      tools:ignore="Instantiatable">
                       <intent-filter>
                           <action android:name="android.media.browse.MediaBrowserService"/>
                       </intent-filter>
                   </service>
                   
-                  <!-- Media button receiver -->
+                  <!-- Media Button Receiver -->
                   <receiver
                       android:name="com.ryanheise.audioservice.MediaButtonReceiver"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MEDIA_BUTTON"/>
-                      </intent-filter>
-                  </receiver>
-                  
-                  <!-- Boot receiver for resuming playback -->
-                  <receiver
-                      android:name="androidx.media.session.MediaButtonReceiver"
-                      android:exported="true">
+                      android:exported="true"
+                      tools:ignore="Instantiatable">
                       <intent-filter>
                           <action android:name="android.intent.action.MEDIA_BUTTON"/>
                       </intent-filter>
@@ -110,17 +115,15 @@ jobs:
               </application>
           </manifest>
           MANIFESTEOF
+          
+          # Update build.gradle for better compatibility
+          sed -i 's/minSdk = .*/minSdk = 21/' android/app/build.gradle
+          sed -i 's/targetSdk = .*/targetSdk = 33/' android/app/build.gradle
 
-      - name: Create App Icon and Notification Icon
+      - name: Create Icons
         run: |
-          # Create all drawable directories
           mkdir -p android/app/src/main/res/drawable
           mkdir -p android/app/src/main/res/drawable-v24
-          mkdir -p android/app/src/main/res/drawable-hdpi
-          mkdir -p android/app/src/main/res/drawable-mdpi
-          mkdir -p android/app/src/main/res/drawable-xhdpi
-          mkdir -p android/app/src/main/res/drawable-xxhdpi
-          mkdir -p android/app/src/main/res/drawable-xxxhdpi
           mkdir -p android/app/src/main/res/mipmap-anydpi-v26
           mkdir -p android/app/src/main/res/mipmap-hdpi
           mkdir -p android/app/src/main/res/mipmap-mdpi
@@ -128,73 +131,56 @@ jobs:
           mkdir -p android/app/src/main/res/mipmap-xxhdpi
           mkdir -p android/app/src/main/res/mipmap-xxxhdpi
           
-          # Notification icon (white, for status bar) - must be single color
-          cat > android/app/src/main/res/drawable/ic_notification.xml << 'NOTIFEOF'
+          # Notification icon (white silhouette for status bar)
+          cat > android/app/src/main/res/drawable/ic_notification.xml << 'ICONEOF'
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="24dp"
-              android:height="24dp"
-              android:viewportWidth="24"
-              android:viewportHeight="24">
-              <path
-                  android:fillColor="#FFFFFF"
+              android:width="24dp" android:height="24dp"
+              android:viewportWidth="24" android:viewportHeight="24">
+              <path android:fillColor="#FFFFFF"
                   android:pathData="M12,3v10.55c-0.59,-0.34 -1.27,-0.55 -2,-0.55c-2.21,0 -4,1.79 -4,4s1.79,4 4,4s4,-1.79 4,-4V7h4V3H12z"/>
           </vector>
-          NOTIFEOF
-          
-          # Copy to all densities
-          cp android/app/src/main/res/drawable/ic_notification.xml android/app/src/main/res/drawable-hdpi/ic_notification.xml
-          cp android/app/src/main/res/drawable/ic_notification.xml android/app/src/main/res/drawable-mdpi/ic_notification.xml
-          cp android/app/src/main/res/drawable/ic_notification.xml android/app/src/main/res/drawable-xhdpi/ic_notification.xml
-          cp android/app/src/main/res/drawable/ic_notification.xml android/app/src/main/res/drawable-xxhdpi/ic_notification.xml
-          cp android/app/src/main/res/drawable/ic_notification.xml android/app/src/main/res/drawable-xxxhdpi/ic_notification.xml
+          ICONEOF
           
           # App icon foreground
-          cat > android/app/src/main/res/drawable/ic_launcher_foreground.xml << 'FGEOF'
+          cat > android/app/src/main/res/drawable/ic_launcher_foreground.xml << 'ICONEOF'
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="108dp"
-              android:height="108dp"
-              android:viewportWidth="108"
-              android:viewportHeight="108">
+              android:width="108dp" android:height="108dp"
+              android:viewportWidth="108" android:viewportHeight="108">
               <path android:fillColor="#84CC16" android:pathData="M54,54m-40,0a40,40 0,1 1,80 0a40,40 0,1 1,-80 0"/>
               <path android:fillColor="#FFFFFF" android:pathData="M58,35v25c-1.5,-1.5 -3.5,-2.5 -6,-2.5c-4.5,0 -8,3.5 -8,8s3.5,8 8,8s8,-3.5 8,-8V43h8v-8H58z"/>
               <path android:fillColor="#FFFFFF" android:pathData="M72,28l2,4l4,2l-4,2l-2,4l-2,-4l-4,-2l4,-2z"/>
-              <path android:fillColor="#FFFFFF" android:fillAlpha="0.7" android:pathData="M62,24l1,2l2,1l-2,1l-1,2l-1,-2l-2,-1l2,-1z"/>
           </vector>
-          FGEOF
-          cp android/app/src/main/res/drawable/ic_launcher_foreground.xml android/app/src/main/res/drawable-v24/ic_launcher_foreground.xml
+          ICONEOF
+          cp android/app/src/main/res/drawable/ic_launcher_foreground.xml android/app/src/main/res/drawable-v24/
           
           # App icon background
-          cat > android/app/src/main/res/drawable/ic_launcher_background.xml << 'BGEOF'
+          cat > android/app/src/main/res/drawable/ic_launcher_background.xml << 'ICONEOF'
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="108dp"
-              android:height="108dp"
-              android:viewportWidth="108"
-              android:viewportHeight="108">
+              android:width="108dp" android:height="108dp"
+              android:viewportWidth="108" android:viewportHeight="108">
               <path android:fillColor="#0D0D0D" android:pathData="M0,0h108v108H0z"/>
           </vector>
-          BGEOF
+          ICONEOF
           
           # Adaptive icon
-          cat > android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml << 'ADAPTIVEEOF'
+          cat > android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml << 'ICONEOF'
           <?xml version="1.0" encoding="utf-8"?>
           <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
               <background android:drawable="@drawable/ic_launcher_background"/>
               <foreground android:drawable="@drawable/ic_launcher_foreground"/>
           </adaptive-icon>
-          ADAPTIVEEOF
+          ICONEOF
           cp android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
           
           # Generate PNG icons
           sudo apt-get update && sudo apt-get install -y imagemagick
-          
           for size in 48:mdpi 72:hdpi 96:xhdpi 144:xxhdpi 192:xxxhdpi; do
             IFS=':' read px density <<< "$size"
-            radius=$((px/3))
-            convert -size ${px}x${px} xc:'#0D0D0D' \
-              -fill '#84CC16' -draw "circle $((px/2)),$((px/2)) $((px/2)),$((px/6))" \
+            convert -size ${px}x${px} xc:'#0D0D0D' -fill '#84CC16' \
+              -draw "circle $((px/2)),$((px/2)) $((px/2)),$((px/6))" \
               android/app/src/main/res/mipmap-${density}/ic_launcher.png
             cp android/app/src/main/res/mipmap-${density}/ic_launcher.png \
                android/app/src/main/res/mipmap-${density}/ic_launcher_round.png
