@@ -736,7 +736,7 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
 
   Future<void> _downloadLyrics(dynamic song) async {
     final path = await DownloadService.downloadLyrics(
-      lyrics: song.cleanedLyrics ??  '',
+      lyrics: song.cleanedLyrics'',
       title: song.title,
       artist: song.displayArtist,
       style: song.displayGenre,
