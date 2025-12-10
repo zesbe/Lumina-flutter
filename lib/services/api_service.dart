@@ -4,16 +4,24 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
   static const String baseUrl = 'https://luminaai.zesbe.my.id/api/v1';
+  static bool _isRefreshing = false;
   
   static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('access_token');
   }
 
+  static Future<String?> getRefreshToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('refresh_token');
+  }
+
   static Future<void> setTokens(String accessToken, String refreshToken) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('access_token', accessToken);
-    await prefs.setString('refresh_token', refreshToken);
+    if (refreshToken.isNotEmpty) {
+      await prefs.setString('refresh_token', refreshToken);
+    }
   }
 
   static Future<void> clearTokens() async {
@@ -33,6 +41,79 @@ class ApiService {
   // Check if response is successful (200, 201, 202)
   static bool _isSuccess(int statusCode) {
     return statusCode >= 200 && statusCode < 300;
+  }
+
+  // Try to refresh token if expired
+  static Future<bool> refreshTokenIfNeeded() async {
+    if (_isRefreshing) return false;
+    
+    final refreshToken = await getRefreshToken();
+    if (refreshToken == null || refreshToken.isEmpty) return false;
+    
+    _isRefreshing = true;
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/refresh'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'refresh_token': refreshToken}),
+      );
+      
+      if (_isSuccess(response.statusCode)) {
+        final data = jsonDecode(response.body);
+        final newAccessToken = data['tokens']?['access_token'] ?? data['access_token'];
+        final newRefreshToken = data['tokens']?['refresh_token'] ?? data['refresh_token'] ?? refreshToken;
+        
+        if (newAccessToken != null) {
+          await setTokens(newAccessToken, newRefreshToken);
+          _isRefreshing = false;
+          return true;
+        }
+      }
+    } catch (e) {
+      // Refresh failed
+    }
+    
+    _isRefreshing = false;
+    return false;
+  }
+
+  // Make authenticated request with auto-refresh
+  static Future<http.Response> _authRequest(
+    String method,
+    String endpoint, {
+    Map<String, dynamic>? body,
+    bool retry = true,
+  }) async {
+    final headers = await _getHeaders();
+    final uri = Uri.parse('$baseUrl$endpoint');
+    
+    http.Response response;
+    switch (method) {
+      case 'GET':
+        response = await http.get(uri, headers: headers);
+        break;
+      case 'POST':
+        response = await http.post(uri, headers: headers, body: body != null ? jsonEncode(body) : null);
+        break;
+      case 'PUT':
+        response = await http.put(uri, headers: headers, body: body != null ? jsonEncode(body) : null);
+        break;
+      case 'DELETE':
+        response = await http.delete(uri, headers: headers);
+        break;
+      default:
+        throw Exception('Invalid method');
+    }
+    
+    // If 401 Unauthorized, try refresh token
+    if (response.statusCode == 401 && retry) {
+      final refreshed = await refreshTokenIfNeeded();
+      if (refreshed) {
+        return _authRequest(method, endpoint, body: body, retry: false);
+      }
+    }
+    
+    return response;
   }
 
   static Future<Map<String, dynamic>> login(String email, String password) async {
@@ -64,11 +145,7 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> getProfile() async {
-    final headers = await _getHeaders();
-    final response = await http.get(
-      Uri.parse('$baseUrl/profile'),
-      headers: headers,
-    );
+    final response = await _authRequest('GET', '/profile');
     
     final data = jsonDecode(response.body);
     if (!_isSuccess(response.statusCode)) {
