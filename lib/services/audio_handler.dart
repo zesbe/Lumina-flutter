@@ -1,7 +1,6 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show Color;
 
 class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AudioPlayer _player = AudioPlayer();
@@ -28,8 +27,6 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
         updatePosition: position,
       ));
     });
-
-    debugPrint('[AudioHandler] Initialized');
   }
 
   void _broadcastState(PlaybackEvent event) {
@@ -121,9 +118,7 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   Future<void> skipToPrevious() async {}
 
   @override
-  Future<void> onTaskRemoved() async {
-    // Keep playing when app closed
-  }
+  Future<void> onTaskRemoved() async {}
 
   Future<void> dispose() => _player.dispose();
 }
@@ -134,16 +129,10 @@ Future<AudioPlayerHandler> initAudioService() async {
     config: const AudioServiceConfig(
       androidNotificationChannelId: 'id.my.zesbe.luminaai.audio',
       androidNotificationChannelName: 'Lumina AI Music',
-      androidNotificationChannelDescription: 'Musik sedang diputar',
       androidNotificationOngoing: true,
       androidStopForegroundOnPause: false,
-      androidShowNotificationBadge: true,
       androidNotificationIcon: 'drawable/ic_notification',
-      notificationColor: Color(0xFF84CC16),
-      androidResumeOnClick: true,
       preloadArtwork: true,
-      artDownscaleWidth: 300,
-      artDownscaleHeight: 300,
       fastForwardInterval: Duration(seconds: 10),
       rewindInterval: Duration(seconds: 10),
     ),
