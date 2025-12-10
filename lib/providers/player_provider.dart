@@ -7,7 +7,6 @@ import '../services/audio_handler.dart';
 enum RepeatMode { off, one, all }
 
 class PlayerProvider with ChangeNotifier {
-  AudioPlayer? _fallbackPlayer;
   Generation? _currentSong;
   List<Generation> _playlist = [];
   List<Generation> _originalPlaylist = [];
@@ -37,39 +36,33 @@ class PlayerProvider with ChangeNotifier {
   Duration? get sleepTimerRemaining => _sleepTimerRemaining;
   bool get hasSleepTimer => _sleepTimerEnd != null;
 
-  AudioPlayer get _player {
-    if (audioHandler != null) return audioHandler!.player;
-    _fallbackPlayer ??= AudioPlayer();
-    return _fallbackPlayer!;
-  }
-
   Future<void> init() async {
     if (_isInitialized) return;
     
-    try {
-      await initAudioService();
-    } catch (e) {
-      debugPrint('[Player] AudioService failed, using fallback: $e');
+    if (audioHandler != null) {
+      _setupListeners();
+      _isInitialized = true;
+      debugPrint('[Player] Using AudioService');
+    } else {
+      debugPrint('[Player] AudioService not available');
     }
-    
-    _setupListeners();
-    _isInitialized = true;
-    debugPrint('[Player] Initialized');
   }
 
   void _setupListeners() {
-    _player.positionStream.listen((pos) {
+    if (audioHandler == null) return;
+    
+    audioHandler!.player.positionStream.listen((pos) {
       _position = pos;
       _updateSleepTimer();
       notifyListeners();
     });
     
-    _player.durationStream.listen((dur) {
+    audioHandler!.player.durationStream.listen((dur) {
       _duration = dur ?? Duration.zero;
       notifyListeners();
     });
     
-    _player.playerStateStream.listen((state) {
+    audioHandler!.player.playerStateStream.listen((state) {
       _isPlaying = state.playing;
       if (state.processingState == ProcessingState.completed) {
         _handleSongComplete();
@@ -81,8 +74,8 @@ class PlayerProvider with ChangeNotifier {
   void _handleSongComplete() {
     switch (_repeatMode) {
       case RepeatMode.one:
-        _player.seek(Duration.zero);
-        _player.play();
+        audioHandler?.player.seek(Duration.zero);
+        audioHandler?.play();
         break;
       case RepeatMode.all:
         _playNextInternal(loop: true);
@@ -158,7 +151,7 @@ class PlayerProvider with ChangeNotifier {
   }
 
   Future<void> play(Generation song) async {
-    if (song.fullOutputUrl.isEmpty) return;
+    if (song.fullOutputUrl.isEmpty || audioHandler == null) return;
     if (!_isInitialized) await init();
     
     _currentSong = song;
@@ -166,28 +159,25 @@ class PlayerProvider with ChangeNotifier {
     if (_currentIndex < 0) _currentIndex = 0;
     
     try {
-      if (audioHandler != null && audioServiceInitialized) {
-        await audioHandler!.playUrl(
-          song.fullOutputUrl,
-          song.title,
-          song.displayArtist,
-          song.fullThumbnailUrl,
-        );
-      } else {
-        await _player.setUrl(song.fullOutputUrl);
-        await _player.play();
-      }
+      await audioHandler!.playUrl(
+        song.fullOutputUrl,
+        song.title,
+        song.displayArtist,
+        song.fullThumbnailUrl.isNotEmpty ? song.fullThumbnailUrl : null,
+      );
+      debugPrint('[Player] Playing: ${song.title}');
       notifyListeners();
     } catch (e) {
-      debugPrint('[Player] Error playing: $e');
+      debugPrint('[Player] Error: $e');
     }
   }
 
   Future<void> togglePlay() async {
+    if (audioHandler == null) return;
     if (_isPlaying) {
-      await _player.pause();
+      await audioHandler!.pause();
     } else {
-      await _player.play();
+      await audioHandler!.play();
     }
   }
 
@@ -222,12 +212,13 @@ class PlayerProvider with ChangeNotifier {
   }
 
   Future<void> seek(double percent) async {
+    if (audioHandler == null) return;
     final pos = Duration(milliseconds: (percent * _duration.inMilliseconds).toInt());
-    await _player.seek(pos);
+    await audioHandler!.seek(pos);
   }
 
   Future<void> stop() async {
-    await _player.stop();
+    await audioHandler?.stop();
     _currentSong = null;
     _isPlaying = false;
     _position = Duration.zero;
@@ -238,7 +229,6 @@ class PlayerProvider with ChangeNotifier {
   @override
   void dispose() {
     _sleepTimer?.cancel();
-    _fallbackPlayer?.dispose();
     super.dispose();
   }
 }

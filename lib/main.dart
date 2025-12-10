@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'providers/auth_provider.dart';
 import 'providers/music_provider.dart';
 import 'providers/player_provider.dart';
+import 'services/audio_handler.dart';
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_screen.dart';
@@ -21,42 +22,19 @@ void main() async {
     ),
   );
   
-  // Wrap everything in try-catch to prevent crashes
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final onboardingComplete = prefs.getBool('onboarding_complete') ?? false;
-    
-    final playerProvider = PlayerProvider();
-    
-    // Don't await - let it init in background
-    playerProvider.init().catchError((e) {
-      debugPrint('[Main] Player init error: $e');
-    });
-    
-    runApp(MyApp(
-      playerProvider: playerProvider,
-      showOnboarding: !onboardingComplete,
-    ));
-  } catch (e) {
-    debugPrint('[Main] Startup error: $e');
-    runApp(const ErrorApp());
-  }
-}
-
-class ErrorApp extends StatelessWidget {
-  const ErrorApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      home: Scaffold(
-        backgroundColor: const Color(0xFF0D0D0D),
-        body: Center(
-          child: Text('Error starting app', style: TextStyle(color: Colors.white)),
-        ),
-      ),
-    );
-  }
+  // Initialize audio service first
+  await initAudioService();
+  
+  final prefs = await SharedPreferences.getInstance();
+  final onboardingComplete = prefs.getBool('onboarding_complete') ?? false;
+  
+  final playerProvider = PlayerProvider();
+  await playerProvider.init();
+  
+  runApp(MyApp(
+    playerProvider: playerProvider,
+    showOnboarding: !onboardingComplete,
+  ));
 }
 
 class MyApp extends StatefulWidget {
