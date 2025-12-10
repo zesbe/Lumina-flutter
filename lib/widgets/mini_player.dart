@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/player_provider.dart';
 import '../providers/music_provider.dart';
 import '../services/download_service.dart';
@@ -257,6 +258,37 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
   bool _showInfo = false;
   bool _isDownloading = false;
   double _downloadProgress = 0;
+  Set<int> _likedPublicSongs = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLikedPublicSongs();
+  }
+
+  Future<void> _loadLikedPublicSongs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final liked = prefs.getStringList('liked_public_songs') ?? [];
+    setState(() {
+      _likedPublicSongs = liked.map((e) => int.tryParse(e) ?? 0).toSet();
+    });
+  }
+
+  Future<void> _togglePublicLike(int songId) async {
+    setState(() {
+      if (_likedPublicSongs.contains(songId)) {
+        _likedPublicSongs.remove(songId);
+      } else {
+        _likedPublicSongs.add(songId);
+      }
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('liked_public_songs', _likedPublicSongs.map((e) => e.toString()).toList());
+  }
+
+  bool _isPublicSong(dynamic song) {
+    return song.creatorName != null && song.creatorName!.isNotEmpty;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -265,6 +297,9 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
     final song = player.currentSong;
 
     if (song == null) return const SizedBox();
+
+    final isPublic = _isPublicSong(song);
+    final isLikedPublic = _likedPublicSongs.contains(song.id);
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.92,
@@ -299,8 +334,16 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
                 ),
                 Column(
                   children: [
-                    const Text('Now Playing', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                    if (player.hasSleepTimer)
+                    Text(
+                      isPublic ? 'From Explore' : 'Now Playing',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                    if (isPublic)
+                      Text(
+                        'by ${song.creatorName}',
+                        style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                      )
+                    else if (player.hasSleepTimer)
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -316,7 +359,7 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
                 ),
                 IconButton(
                   icon: const Icon(Icons.more_vert),
-                  onPressed: () => _showOptions(context, song, music),
+                  onPressed: () => _showOptions(context, song, music, isPublic, isLikedPublic),
                 ),
               ],
             ),
@@ -326,7 +369,7 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
             child: _showLyrics && song.cleanedLyrics.isNotEmpty
                 ? _buildLyricsView(song.cleanedLyrics)
                 : _showInfo
-                    ? _buildInfoView(song)
+                    ? _buildInfoView(song, isPublic)
                     : _buildAlbumArt(song),
           ),
           
@@ -351,7 +394,6 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
           ),
           const SizedBox(height: 16),
           
-          // Progress bar
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Column(
@@ -384,13 +426,11 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
           ),
           const SizedBox(height: 8),
           
-          // Main controls
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                // Shuffle
                 IconButton(
                   icon: Icon(
                     Icons.shuffle_rounded,
@@ -400,13 +440,11 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
                   onPressed: () => player.toggleShuffle(),
                   tooltip: 'Shuffle',
                 ),
-                // Previous
                 IconButton(
                   icon: const Icon(Icons.skip_previous_rounded),
                   iconSize: 36,
                   onPressed: () => player.playPrevious(),
                 ),
-                // Play/Pause
                 GestureDetector(
                   onTap: () => player.togglePlay(),
                   child: Container(
@@ -431,13 +469,11 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
                     ),
                   ),
                 ),
-                // Next
                 IconButton(
                   icon: const Icon(Icons.skip_next_rounded),
                   iconSize: 36,
                   onPressed: () => player.playNext(),
                 ),
-                // Repeat
                 IconButton(
                   icon: Icon(
                     player.repeatMode == RepeatMode.one
@@ -456,7 +492,6 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
           ),
           const SizedBox(height: 8),
           
-          // Secondary controls
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Row(
@@ -478,18 +513,38 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
                   activeColor: Colors.amber,
                   onTap: () => _showSleepTimerDialog(context, player),
                 ),
+                // Favorite button - different behavior for public vs own songs
                 _SmallActionButton(
-                  icon: song.isFavorite ? Icons.favorite : Icons.favorite_border,
+                  icon: isPublic
+                      ? (isLikedPublic ? Icons.favorite : Icons.favorite_border)
+                      : (song.isFavorite ? Icons.favorite : Icons.favorite_border),
                   label: 'Favorit',
-                  isActive: song.isFavorite,
+                  isActive: isPublic ? isLikedPublic : song.isFavorite,
                   activeColor: Colors.red,
-                  onTap: () => music.toggleFavorite(song.id),
+                  onTap: () {
+                    if (isPublic) {
+                      _togglePublicLike(song.id);
+                      _showSnackBar(isLikedPublic ? 'Dihapus dari favorit' : 'Ditambahkan ke favorit');
+                    } else {
+                      music.toggleFavorite(song.id);
+                    }
+                  },
                 ),
-                _SmallActionButton(
-                  icon: Icons.download,
-                  label: _isDownloading ? '${(_downloadProgress * 100).toInt()}%' : 'Unduh',
-                  onTap: _isDownloading ? null : () => _downloadMusic(song),
-                ),
+                // Download button - only show for OWN songs, not public
+                if (!isPublic)
+                  _SmallActionButton(
+                    icon: Icons.download,
+                    label: _isDownloading ? '${(_downloadProgress * 100).toInt()}%' : 'Unduh',
+                    onTap: _isDownloading ? null : () => _downloadMusic(song),
+                  )
+                else
+                  _SmallActionButton(
+                    icon: Icons.public,
+                    label: 'Publik',
+                    isActive: true,
+                    activeColor: Colors.blue,
+                    onTap: () => _showSnackBar('Musik ini dari kreator lain'),
+                  ),
                 _SmallActionButton(
                   icon: _showInfo ? Icons.info : Icons.info_outline,
                   label: 'Info',
@@ -572,7 +627,7 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
     );
   }
 
-  Widget _buildInfoView(dynamic song) {
+  Widget _buildInfoView(dynamic song, bool isPublic) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24),
       padding: const EdgeInsets.all(20),
@@ -584,8 +639,12 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('📋 Informasi Lagu', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(
+              isPublic ? '📋 Info Musik Publik' : '📋 Informasi Lagu',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 20),
+            if (isPublic) _InfoRow(icon: Icons.person, label: 'Kreator', value: song.creatorName ?? 'Unknown'),
             _InfoRow(icon: Icons.person, label: 'Artis', value: song.displayArtist),
             _InfoRow(icon: Icons.album, label: 'Album', value: song.displayAlbum),
             _InfoRow(icon: Icons.music_note, label: 'Genre', value: song.displayGenre),
@@ -594,7 +653,7 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
             _InfoRow(icon: Icons.access_time, label: 'Durasi', value: song.formattedDuration),
             _InfoRow(icon: Icons.schedule, label: 'Dibuat', value: song.formattedDate),
             _InfoRow(icon: Icons.smart_toy, label: 'Model AI', value: song.model ?? 'music-2.0'),
-            if (song.prompt != null && song.prompt!.isNotEmpty)
+            if (!isPublic && song.prompt != null && song.prompt!.isNotEmpty)
               _InfoRow(icon: Icons.text_fields, label: 'Prompt', value: song.prompt!),
           ],
         ),
@@ -656,7 +715,7 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
     );
   }
 
-  void _showOptions(BuildContext context, dynamic song, MusicProvider music) {
+  void _showOptions(BuildContext context, dynamic song, MusicProvider music, bool isPublic, bool isLikedPublic) {
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF1A1A1A),
@@ -668,16 +727,48 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: const Icon(Icons.download, color: Color(0xFF84CC16)),
-              title: const Text('Download Musik'),
-              subtitle: const Text('Simpan MP3 ke perangkat'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _downloadMusic(song);
-              },
-            ),
-            if (song.cleanedLyrics.isNotEmpty)
+            // Show creator info for public songs
+            if (isPublic) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.public, color: Colors.blue),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Musik Publik', style: TextStyle(fontWeight: FontWeight.bold)),
+                          Text('Dibuat oleh ${song.creatorName}', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+            
+            // Download - only for own songs
+            if (!isPublic)
+              ListTile(
+                leading: const Icon(Icons.download, color: Color(0xFF84CC16)),
+                title: const Text('Download Musik'),
+                subtitle: const Text('Simpan MP3 ke perangkat'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _downloadMusic(song);
+                },
+              ),
+            
+            // Download lyrics - only for own songs
+            if (!isPublic && song.cleanedLyrics.isNotEmpty)
               ListTile(
                 leading: const Icon(Icons.text_snippet, color: Color(0xFF84CC16)),
                 title: const Text('Download Lirik'),
@@ -686,17 +777,41 @@ class _FullPlayerSheetState extends State<_FullPlayerSheet> {
                   _downloadLyrics(song);
                 },
               ),
+            
+            // Favorite - different behavior
             ListTile(
               leading: Icon(
-                song.isFavorite ? Icons.favorite : Icons.favorite_border,
-                color: song.isFavorite ? Colors.red : Colors.grey,
+                isPublic
+                    ? (isLikedPublic ? Icons.favorite : Icons.favorite_border)
+                    : (song.isFavorite ? Icons.favorite : Icons.favorite_border),
+                color: (isPublic ? isLikedPublic : song.isFavorite) ? Colors.red : Colors.grey,
               ),
-              title: Text(song.isFavorite ? 'Hapus dari Favorit' : 'Tambah ke Favorit'),
+              title: Text(
+                isPublic
+                    ? (isLikedPublic ? 'Hapus dari Favorit' : 'Tambah ke Favorit')
+                    : (song.isFavorite ? 'Hapus dari Favorit' : 'Tambah ke Favorit'),
+              ),
               onTap: () {
-                music.toggleFavorite(song.id);
-                Navigator.pop(ctx);
+                if (isPublic) {
+                  _togglePublicLike(song.id);
+                  Navigator.pop(ctx);
+                  _showSnackBar(isLikedPublic ? 'Dihapus dari favorit' : 'Ditambahkan ke favorit');
+                } else {
+                  music.toggleFavorite(song.id);
+                  Navigator.pop(ctx);
+                }
               },
             ),
+            
+            // Message for public songs
+            if (isPublic)
+              ListTile(
+                leading: const Icon(Icons.block, color: Colors.grey),
+                title: const Text('Download tidak tersedia'),
+                subtitle: const Text('Musik ini milik kreator lain', style: TextStyle(fontSize: 12)),
+                enabled: false,
+              ),
+            
             const SizedBox(height: 10),
           ],
         ),
