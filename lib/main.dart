@@ -22,8 +22,12 @@ void main() async {
     ),
   );
   
-  // Initialize audio service first
-  await initAudioService();
+  // Try init audio service, but don't crash if it fails
+  try {
+    await initAudioService();
+  } catch (e) {
+    debugPrint('[Main] Audio service init error: $e');
+  }
   
   final prefs = await SharedPreferences.getInstance();
   final onboardingComplete = prefs.getBool('onboarding_complete') ?? false;

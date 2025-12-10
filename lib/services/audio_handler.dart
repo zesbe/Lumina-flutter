@@ -2,173 +2,143 @@ import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:flutter/foundation.dart';
 
-class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
-  final AudioPlayer _player = AudioPlayer();
+// Simple player that ALWAYS works
+class SimpleAudioPlayer {
+  final AudioPlayer player = AudioPlayer();
   
-  AudioPlayer get player => _player;
+  Future<void> playUrl(String url) async {
+    await player.setUrl(url);
+    await player.play();
+  }
+  
+  Future<void> play() => player.play();
+  Future<void> pause() => player.pause();
+  Future<void> stop() => player.stop();
+  Future<void> seek(Duration pos) => player.seek(pos);
+}
+
+// Audio Service handler for notifications
+class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
+  final AudioPlayer player = AudioPlayer();
 
   AudioPlayerHandler() {
-    // Broadcast initial state
-    _broadcastState(PlaybackEvent());
-    
-    // Listen to player events
-    _player.playbackEventStream.listen(_broadcastState);
-    
-    _player.playerStateStream.listen((state) {
-      _broadcastState(PlaybackEvent());
-    });
-    
-    _player.processingStateStream.listen((state) {
-      if (state == ProcessingState.completed) {
-        playbackState.add(playbackState.value.copyWith(
-          processingState: AudioProcessingState.completed,
-        ));
-      }
-    });
+    player.playbackEventStream.listen(_broadcastState);
+    player.playerStateStream.listen((_) => _broadcastState(PlaybackEvent()));
   }
 
   void _broadcastState(PlaybackEvent event) {
-    final playing = _player.playing;
-    
     playbackState.add(PlaybackState(
       controls: [
         MediaControl.skipToPrevious,
-        playing ? MediaControl.pause : MediaControl.play,
+        player.playing ? MediaControl.pause : MediaControl.play,
         MediaControl.stop,
         MediaControl.skipToNext,
       ],
       systemActions: const {
-        MediaAction.seek,
-        MediaAction.seekForward,
-        MediaAction.seekBackward,
-        MediaAction.skipToNext,
-        MediaAction.skipToPrevious,
-        MediaAction.play,
-        MediaAction.pause,
-        MediaAction.stop,
+        MediaAction.play, MediaAction.pause, MediaAction.stop,
+        MediaAction.seek, MediaAction.skipToNext, MediaAction.skipToPrevious,
       },
       androidCompactActionIndices: const [0, 1, 3],
-      processingState: const {
+      processingState: {
         ProcessingState.idle: AudioProcessingState.idle,
         ProcessingState.loading: AudioProcessingState.loading,
         ProcessingState.buffering: AudioProcessingState.buffering,
         ProcessingState.ready: AudioProcessingState.ready,
         ProcessingState.completed: AudioProcessingState.completed,
-      }[_player.processingState] ?? AudioProcessingState.idle,
-      playing: playing,
-      updatePosition: _player.position,
-      bufferedPosition: _player.bufferedPosition,
-      speed: _player.speed,
-      queueIndex: 0,
+      }[player.processingState] ?? AudioProcessingState.idle,
+      playing: player.playing,
+      updatePosition: player.position,
+      bufferedPosition: player.bufferedPosition,
+      speed: player.speed,
     ));
   }
 
   Future<void> playUrl(String url, String title, String artist, String? artUrl) async {
-    debugPrint('[AudioHandler] Playing: $title from $url');
-    
-    // Set media item first (for notification)
-    final item = MediaItem(
+    mediaItem.add(MediaItem(
       id: url,
       title: title,
       artist: artist,
-      artUri: artUrl != null && artUrl.isNotEmpty ? Uri.tryParse(artUrl) : null,
-    );
-    mediaItem.add(item);
-    
-    try {
-      // Load and play
-      await _player.setUrl(url);
-      await _player.play();
-      debugPrint('[AudioHandler] Playback started');
-    } catch (e) {
-      debugPrint('[AudioHandler] Error: $e');
-      rethrow;
-    }
+      artUri: artUrl != null ? Uri.tryParse(artUrl) : null,
+    ));
+    await player.setUrl(url);
+    await player.play();
   }
 
-  @override
-  Future<void> play() async {
-    debugPrint('[AudioHandler] play()');
-    await _player.play();
-  }
-
-  @override
-  Future<void> pause() async {
-    debugPrint('[AudioHandler] pause()');
-    await _player.pause();
-  }
-
-  @override
-  Future<void> stop() async {
-    debugPrint('[AudioHandler] stop()');
-    await _player.stop();
-    await super.stop();
-  }
-
-  @override
-  Future<void> seek(Duration position) async {
-    debugPrint('[AudioHandler] seek($position)');
-    await _player.seek(position);
-  }
-
-  @override
-  Future<void> skipToNext() async {
-    debugPrint('[AudioHandler] skipToNext()');
-    // Handled by PlayerProvider
-  }
-
-  @override
-  Future<void> skipToPrevious() async {
-    debugPrint('[AudioHandler] skipToPrevious()');
-    // Handled by PlayerProvider
-  }
-  
-  @override
-  Future<void> click([MediaButton button = MediaButton.media]) async {
-    debugPrint('[AudioHandler] click($button)');
-    switch (button) {
-      case MediaButton.media:
-        if (_player.playing) {
-          await pause();
-        } else {
-          await play();
-        }
-        break;
-      case MediaButton.next:
-        await skipToNext();
-        break;
-      case MediaButton.previous:
-        await skipToPrevious();
-        break;
-    }
-  }
+  @override Future<void> play() => player.play();
+  @override Future<void> pause() => player.pause();
+  @override Future<void> stop() async { await player.stop(); await super.stop(); }
+  @override Future<void> seek(Duration position) => player.seek(position);
+  @override Future<void> skipToNext() async {}
+  @override Future<void> skipToPrevious() async {}
 }
 
+// Global instances
 AudioPlayerHandler? audioHandler;
-bool audioServiceInitialized = false;
+SimpleAudioPlayer? fallbackPlayer;
+bool useAudioService = false;
+
+// Get the active player
+AudioPlayer get activePlayer {
+  if (useAudioService && audioHandler != null) {
+    return audioHandler!.player;
+  }
+  fallbackPlayer ??= SimpleAudioPlayer();
+  return fallbackPlayer!.player;
+}
 
 Future<void> initAudioService() async {
-  debugPrint('[AudioService] Initializing...');
+  debugPrint('[Audio] Initializing...');
+  
   try {
     audioHandler = await AudioService.init(
       builder: () => AudioPlayerHandler(),
       config: const AudioServiceConfig(
-        androidNotificationChannelId: 'id.my.zesbe.lumina.channel',
-        androidNotificationChannelName: 'Lumina AI Music',
-        androidNotificationChannelDescription: 'Music playback controls',
-        androidNotificationIcon: 'mipmap/ic_launcher',
-        androidShowNotificationBadge: true,
+        androidNotificationChannelId: 'id.my.zesbe.lumina.audio',
+        androidNotificationChannelName: 'Lumina AI',
         androidStopForegroundOnPause: true,
-        artDownscaleWidth: 300,
-        artDownscaleHeight: 300,
-        fastForwardInterval: Duration(seconds: 10),
-        rewindInterval: Duration(seconds: 10),
       ),
     );
-    audioServiceInitialized = true;
-    debugPrint('[AudioService] Initialized successfully!');
+    useAudioService = true;
+    debugPrint('[Audio] AudioService OK - notifications enabled');
   } catch (e) {
-    debugPrint('[AudioService] Init failed: $e');
-    audioServiceInitialized = false;
+    debugPrint('[Audio] AudioService failed: $e');
+    debugPrint('[Audio] Using fallback player - no notifications');
+    fallbackPlayer = SimpleAudioPlayer();
+    useAudioService = false;
+  }
+}
+
+Future<void> playMusic(String url, String title, String artist, String? artUrl) async {
+  debugPrint('[Audio] Playing: $title');
+  
+  if (useAudioService && audioHandler != null) {
+    await audioHandler!.playUrl(url, title, artist, artUrl);
+  } else {
+    fallbackPlayer ??= SimpleAudioPlayer();
+    await fallbackPlayer!.playUrl(url);
+  }
+}
+
+Future<void> pauseMusic() async {
+  if (useAudioService && audioHandler != null) {
+    await audioHandler!.pause();
+  } else {
+    await fallbackPlayer?.pause();
+  }
+}
+
+Future<void> resumeMusic() async {
+  if (useAudioService && audioHandler != null) {
+    await audioHandler!.play();
+  } else {
+    await fallbackPlayer?.play();
+  }
+}
+
+Future<void> stopMusic() async {
+  if (useAudioService && audioHandler != null) {
+    await audioHandler!.stop();
+  } else {
+    await fallbackPlayer?.stop();
   }
 }
