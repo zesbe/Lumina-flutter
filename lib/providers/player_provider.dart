@@ -44,19 +44,18 @@ class PlayerProvider with ChangeNotifier {
   }
 
   void _setupListeners() {
-    // Use activePlayer from audio_handler
-    activePlayer.positionStream.listen((pos) {
+    audioHandler.player.positionStream.listen((pos) {
       _position = pos;
       _updateSleepTimer();
       notifyListeners();
     });
     
-    activePlayer.durationStream.listen((dur) {
+    audioHandler.player.durationStream.listen((dur) {
       _duration = dur ?? Duration.zero;
       notifyListeners();
     });
     
-    activePlayer.playerStateStream.listen((state) {
+    audioHandler.player.playerStateStream.listen((state) {
       _isPlaying = state.playing;
       if (state.processingState == ProcessingState.completed) {
         _handleSongComplete();
@@ -66,11 +65,11 @@ class PlayerProvider with ChangeNotifier {
   }
 
   void _handleSongComplete() {
-    debugPrint('[Player] Song completed, repeatMode: $_repeatMode');
+    debugPrint('[Player] Song completed');
     switch (_repeatMode) {
       case RepeatMode.one:
-        activePlayer.seek(Duration.zero);
-        activePlayer.play();
+        audioHandler.player.seek(Duration.zero);
+        audioHandler.play();
         break;
       case RepeatMode.all:
         _playNextInternal(loop: true);
@@ -99,7 +98,6 @@ class PlayerProvider with ChangeNotifier {
 
   void toggleRepeatMode() {
     _repeatMode = RepeatMode.values[(_repeatMode.index + 1) % 3];
-    debugPrint('[Player] Repeat mode: $_repeatMode');
     notifyListeners();
   }
 
@@ -118,7 +116,6 @@ class PlayerProvider with ChangeNotifier {
       _currentIndex = _playlist.indexWhere((s) => s.id == _currentSong?.id);
       if (_currentIndex < 0) _currentIndex = 0;
     }
-    debugPrint('[Player] Shuffle: $_shuffleEnabled');
     notifyListeners();
   }
 
@@ -145,15 +142,10 @@ class PlayerProvider with ChangeNotifier {
     _playlist = songs.where((s) => s.status == 'completed').toList();
     _originalPlaylist = List.from(_playlist);
     if (_shuffleEnabled) _playlist.shuffle();
-    debugPrint('[Player] Playlist set: ${_playlist.length} songs');
   }
 
   Future<void> play(Generation song) async {
-    if (song.fullOutputUrl.isEmpty) {
-      debugPrint('[Player] No URL for song');
-      return;
-    }
-    
+    if (song.fullOutputUrl.isEmpty) return;
     if (!_isInitialized) await init();
     
     _currentSong = song;
@@ -161,27 +153,21 @@ class PlayerProvider with ChangeNotifier {
     if (_currentIndex < 0) _currentIndex = 0;
     
     debugPrint('[Player] Playing: ${song.title}');
-    debugPrint('[Player] URL: ${song.fullOutputUrl}');
     
-    try {
-      await playMusic(
-        song.fullOutputUrl,
-        song.title,
-        song.displayArtist,
-        song.fullThumbnailUrl.isNotEmpty ? song.fullThumbnailUrl : null,
-      );
-      notifyListeners();
-    } catch (e) {
-      debugPrint('[Player] Error playing: $e');
-    }
+    await audioHandler.playUrl(
+      song.fullOutputUrl,
+      song.title,
+      song.displayArtist,
+      song.fullThumbnailUrl.isNotEmpty ? song.fullThumbnailUrl : null,
+    );
+    notifyListeners();
   }
 
   Future<void> togglePlay() async {
-    debugPrint('[Player] Toggle play, isPlaying: $_isPlaying');
     if (_isPlaying) {
-      await pauseMusic();
+      await audioHandler.pause();
     } else {
-      await resumeMusic();
+      await audioHandler.play();
     }
   }
 
@@ -217,11 +203,11 @@ class PlayerProvider with ChangeNotifier {
 
   Future<void> seek(double percent) async {
     final pos = Duration(milliseconds: (percent * _duration.inMilliseconds).toInt());
-    await activePlayer.seek(pos);
+    await audioHandler.seek(pos);
   }
 
   Future<void> stop() async {
-    await stopMusic();
+    await audioHandler.stop();
     _currentSong = null;
     _isPlaying = false;
     _position = Duration.zero;

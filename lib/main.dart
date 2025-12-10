@@ -12,7 +12,7 @@ import 'screens/login_screen.dart';
 import 'screens/main_screen.dart';
 import 'screens/onboarding_screen.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   SystemChrome.setSystemUIOverlayStyle(
@@ -22,12 +22,8 @@ void main() async {
     ),
   );
   
-  // Try init audio service, but don't crash if it fails
-  try {
-    await initAudioService();
-  } catch (e) {
-    debugPrint('[Main] Audio service init error: $e');
-  }
+  // MUST init audio service first
+  await initAudioService();
   
   final prefs = await SharedPreferences.getInstance();
   final onboardingComplete = prefs.getBool('onboarding_complete') ?? false;

@@ -34,27 +34,18 @@ jobs:
           mv assets_backup assets
           mv pubspec_backup.yaml pubspec.yaml
 
-      - name: Configure Android for all versions
+      - name: Configure Android for audio_service
         run: |
-          # AndroidManifest with ALL permissions for Android 10-14
+          # 1. AndroidManifest.xml - CRITICAL: Use AudioServiceActivity!
           cat > android/app/src/main/AndroidManifest.xml << 'EOF'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               xmlns:tools="http://schemas.android.com/tools">
               
-              <!-- Internet -->
               <uses-permission android:name="android.permission.INTERNET"/>
-              
-              <!-- Audio/Media -->
               <uses-permission android:name="android.permission.WAKE_LOCK"/>
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
-              
-              <!-- Android 13+ Notifications -->
               <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-              
-              <!-- Storage for downloads -->
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>
               <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
               
               <application
@@ -64,8 +55,9 @@ jobs:
                   android:usesCleartextTraffic="true"
                   tools:targetApi="34">
                   
+                  <!-- CRITICAL: Activity MUST use AudioServiceActivity for notifications! -->
                   <activity
-                      android:name=".MainActivity"
+                      android:name="com.ryanheise.audioservice.AudioServiceActivity"
                       android:exported="true"
                       android:launchMode="singleTop"
                       android:taskAffinity=""
@@ -83,7 +75,7 @@ jobs:
                       </intent-filter>
                   </activity>
                   
-                  <!-- Audio Service for background playback & notifications -->
+                  <!-- Audio Service -->
                   <service 
                       android:name="com.ryanheise.audioservice.AudioService"
                       android:foregroundServiceType="mediaPlayback"
@@ -109,10 +101,18 @@ jobs:
           </manifest>
           EOF
           
-          # Update build.gradle
+          # 2. build.gradle
           sed -i 's/minSdk.*/minSdk = 21/' android/app/build.gradle
           sed -i 's/targetSdk.*/targetSdk = 34/' android/app/build.gradle
           sed -i 's/compileSdk.*/compileSdk = 34/' android/app/build.gradle
+          
+          # 3. Keep resources file (prevent icon stripping)
+          mkdir -p android/app/src/main/res/raw
+          cat > android/app/src/main/res/raw/keep.xml << 'KEEPEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources xmlns:tools="http://schemas.android.com/tools"
+            tools:keep="@drawable/*,@mipmap/*" />
+          KEEPEOF
 
       - name: Copy custom app icon
         run: |
