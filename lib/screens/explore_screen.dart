@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import '../providers/player_provider.dart';
 import '../models/generation.dart';
@@ -15,13 +16,39 @@ class ExploreScreen extends StatefulWidget {
 
 class _ExploreScreenState extends State<ExploreScreen> {
   List<Generation> _publicSongs = [];
+  Set<int> _likedSongs = {};
   bool _isLoading = true;
   String? _error;
 
   @override
   void initState() {
     super.initState();
+    _loadLikedSongs();
     _loadPublicSongs();
+  }
+
+  Future<void> _loadLikedSongs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final liked = prefs.getStringList('liked_public_songs') ?? [];
+    setState(() {
+      _likedSongs = liked.map((e) => int.tryParse(e) ?? 0).toSet();
+    });
+  }
+
+  Future<void> _saveLikedSongs() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('liked_public_songs', _likedSongs.map((e) => e.toString()).toList());
+  }
+
+  void _toggleLike(int songId) {
+    setState(() {
+      if (_likedSongs.contains(songId)) {
+        _likedSongs.remove(songId);
+      } else {
+        _likedSongs.add(songId);
+      }
+    });
+    _saveLikedSongs();
   }
 
   Future<void> _loadPublicSongs() async {
@@ -139,32 +166,55 @@ class _ExploreScreenState extends State<ExploreScreen> {
         itemCount: _publicSongs.length,
         itemBuilder: (context, index) {
           final song = _publicSongs[index];
+          final isLiked = _likedSongs.contains(song.id);
           return _PublicSongCard(
             song: song,
-            onTap: () => _showSongOptions(song),
+            isLiked: isLiked,
+            onTap: () => _showSongOptions(song, isLiked),
+            onLike: () => _toggleLike(song.id),
           );
         },
       ),
     );
   }
 
-  void _showSongOptions(Generation song) {
+  void _showSongOptions(Generation song, bool isLiked) {
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF1A1A1A),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => _SongOptionsSheet(song: song),
+      builder: (context) => _SongOptionsSheet(
+        song: song,
+        isLiked: isLiked,
+        onToggleLike: () {
+          _toggleLike(song.id);
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(isLiked ? 'Dihapus dari favorit' : 'Ditambahkan ke favorit'),
+              backgroundColor: const Color(0xFF84CC16),
+            ),
+          );
+        },
+      ),
     );
   }
 }
 
 class _PublicSongCard extends StatelessWidget {
   final Generation song;
+  final bool isLiked;
   final VoidCallback onTap;
+  final VoidCallback onLike;
 
-  const _PublicSongCard({required this.song, required this.onTap});
+  const _PublicSongCard({
+    required this.song,
+    required this.isLiked,
+    required this.onTap,
+    required this.onLike,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -225,18 +275,35 @@ class _PublicSongCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(color: const Color(0xFF84CC16).withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                          child: Text(song.displayGenre, style: const TextStyle(color: Color(0xFF84CC16), fontSize: 10, fontWeight: FontWeight.bold)),
-                        ),
-                      ],
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(color: const Color(0xFF84CC16).withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
+                      child: Text(song.displayGenre, style: const TextStyle(color: Color(0xFF84CC16), fontSize: 10, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
               ),
+              
+              // Like button
+              GestureDetector(
+                onTap: onLike,
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: isLiked ? Colors.red.withOpacity(0.2) : Colors.white.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Icon(
+                    isLiked ? Icons.favorite : Icons.favorite_border,
+                    color: isLiked ? Colors.red : Colors.grey,
+                    size: 22,
+                  ),
+                ),
+              ),
+              
+              // Play button
               GestureDetector(
                 onTap: () {
                   final player = context.read<PlayerProvider>();
@@ -267,8 +334,14 @@ class _PublicSongCard extends StatelessWidget {
 
 class _SongOptionsSheet extends StatelessWidget {
   final Generation song;
+  final bool isLiked;
+  final VoidCallback onToggleLike;
 
-  const _SongOptionsSheet({required this.song});
+  const _SongOptionsSheet({
+    required this.song,
+    required this.isLiked,
+    required this.onToggleLike,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -321,6 +394,14 @@ class _SongOptionsSheet extends StatelessWidget {
             },
           ),
           
+          // Like/Unlike
+          _OptionTile(
+            icon: isLiked ? Icons.favorite : Icons.favorite_border,
+            iconColor: isLiked ? Colors.red : null,
+            title: isLiked ? '💔 Hapus dari Favorit' : '❤️ Tambah ke Favorit',
+            onTap: onToggleLike,
+          ),
+          
           // View Lyrics
           _OptionTile(
             icon: Icons.lyrics,
@@ -331,30 +412,13 @@ class _SongOptionsSheet extends StatelessWidget {
             },
           ),
           
-          // Download
-          _OptionTile(
-            icon: Icons.download,
-            title: '📥 Download Musik',
-            subtitle: 'Salin link ke clipboard',
-            onTap: () {
-              Clipboard.setData(ClipboardData(text: song.fullOutputUrl));
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Link musik disalin! Paste di browser untuk download'),
-                  backgroundColor: Color(0xFF84CC16),
-                ),
-              );
-            },
-          ),
-          
-          // Share
+          // Share (without download link)
           _OptionTile(
             icon: Icons.share,
             title: '📤 Bagikan',
             onTap: () {
               Clipboard.setData(ClipboardData(
-                text: 'Dengarkan "${song.title}" oleh ${song.creatorName ?? "Unknown"} di Lumina AI!\n${song.fullOutputUrl}',
+                text: 'Dengarkan "${song.title}" oleh ${song.creatorName ?? "Unknown"} di Lumina AI! 🎵',
               ));
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
@@ -403,26 +467,6 @@ class _SongOptionsSheet extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
-              if (song.cleanedLyrics.isNotEmpty)
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          Clipboard.setData(ClipboardData(text: song.cleanedLyrics));
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Lirik disalin!'), backgroundColor: Color(0xFF84CC16)),
-                          );
-                        },
-                        icon: const Icon(Icons.copy, size: 18),
-                        label: const Text('Salin Lirik'),
-                        style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: BorderSide(color: Colors.grey[700]!)),
-                      ),
-                    ),
-                  ],
-                ),
             ],
           ),
         ),
