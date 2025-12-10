@@ -79,15 +79,23 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
   Future<void> skipToPrevious() async {}
 }
 
-late AudioPlayerHandler audioHandler;
+AudioPlayerHandler? audioHandler;
+bool audioServiceInitialized = false;
 
 Future<void> initAudioService() async {
-  audioHandler = await AudioService.init(
-    builder: () => AudioPlayerHandler(),
-    config: const AudioServiceConfig(
-      androidNotificationChannelId: 'id.my.zesbe.lumina.audio',
-      androidNotificationChannelName: 'Lumina AI',
-      androidStopForegroundOnPause: true,
-    ),
-  );
+  try {
+    audioHandler = await AudioService.init(
+      builder: () => AudioPlayerHandler(),
+      config: const AudioServiceConfig(
+        androidNotificationChannelId: 'id.my.zesbe.lumina.audio',
+        androidNotificationChannelName: 'Lumina AI',
+        androidStopForegroundOnPause: true,
+      ),
+    );
+    audioServiceInitialized = true;
+    debugPrint('[Audio] Service initialized successfully');
+  } catch (e) {
+    debugPrint('[Audio] Service init failed: $e');
+    audioServiceInitialized = false;
+  }
 }

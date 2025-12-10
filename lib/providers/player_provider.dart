@@ -7,6 +7,7 @@ import '../services/audio_handler.dart';
 enum RepeatMode { off, one, all }
 
 class PlayerProvider with ChangeNotifier {
+  AudioPlayer? _fallbackPlayer;
   Generation? _currentSong;
   List<Generation> _playlist = [];
   List<Generation> _originalPlaylist = [];
@@ -36,44 +37,52 @@ class PlayerProvider with ChangeNotifier {
   Duration? get sleepTimerRemaining => _sleepTimerRemaining;
   bool get hasSleepTimer => _sleepTimerEnd != null;
 
+  AudioPlayer get _player {
+    if (audioHandler != null) return audioHandler!.player;
+    _fallbackPlayer ??= AudioPlayer();
+    return _fallbackPlayer!;
+  }
+
   Future<void> init() async {
     if (_isInitialized) return;
-    await initAudioService();
+    
+    try {
+      await initAudioService();
+    } catch (e) {
+      debugPrint('[Player] AudioService failed, using fallback: $e');
+    }
+    
     _setupListeners();
     _isInitialized = true;
+    debugPrint('[Player] Initialized');
   }
 
   void _setupListeners() {
-    audioHandler.player.positionStream.listen((pos) {
+    _player.positionStream.listen((pos) {
       _position = pos;
       _updateSleepTimer();
       notifyListeners();
     });
     
-    audioHandler.player.durationStream.listen((dur) {
+    _player.durationStream.listen((dur) {
       _duration = dur ?? Duration.zero;
       notifyListeners();
     });
     
-    audioHandler.player.playerStateStream.listen((state) {
+    _player.playerStateStream.listen((state) {
       _isPlaying = state.playing;
       if (state.processingState == ProcessingState.completed) {
         _handleSongComplete();
       }
       notifyListeners();
     });
-
-    // Listen for notification controls
-    audioHandler.playbackState.listen((state) {
-      // Handle skip from notification
-    });
   }
 
   void _handleSongComplete() {
     switch (_repeatMode) {
       case RepeatMode.one:
-        audioHandler.player.seek(Duration.zero);
-        audioHandler.play();
+        _player.seek(Duration.zero);
+        _player.play();
         break;
       case RepeatMode.all:
         _playNextInternal(loop: true);
@@ -156,20 +165,29 @@ class PlayerProvider with ChangeNotifier {
     _currentIndex = _playlist.indexWhere((s) => s.id == song.id);
     if (_currentIndex < 0) _currentIndex = 0;
     
-    await audioHandler.playUrl(
-      song.fullOutputUrl,
-      song.title,
-      song.displayArtist,
-      song.fullThumbnailUrl,
-    );
-    notifyListeners();
+    try {
+      if (audioHandler != null && audioServiceInitialized) {
+        await audioHandler!.playUrl(
+          song.fullOutputUrl,
+          song.title,
+          song.displayArtist,
+          song.fullThumbnailUrl,
+        );
+      } else {
+        await _player.setUrl(song.fullOutputUrl);
+        await _player.play();
+      }
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[Player] Error playing: $e');
+    }
   }
 
   Future<void> togglePlay() async {
     if (_isPlaying) {
-      await audioHandler.pause();
+      await _player.pause();
     } else {
-      await audioHandler.play();
+      await _player.play();
     }
   }
 
@@ -205,11 +223,11 @@ class PlayerProvider with ChangeNotifier {
 
   Future<void> seek(double percent) async {
     final pos = Duration(milliseconds: (percent * _duration.inMilliseconds).toInt());
-    await audioHandler.seek(pos);
+    await _player.seek(pos);
   }
 
   Future<void> stop() async {
-    await audioHandler.stop();
+    await _player.stop();
     _currentSong = null;
     _isPlaying = false;
     _position = Duration.zero;
@@ -220,6 +238,7 @@ class PlayerProvider with ChangeNotifier {
   @override
   void dispose() {
     _sleepTimer?.cancel();
+    _fallbackPlayer?.dispose();
     super.dispose();
   }
 }
